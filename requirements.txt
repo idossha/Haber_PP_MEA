@@ -1,0 +1,96 @@
+# requirements.txt — Haber_PP_MEA
+#
+# This is a MATLAB codebase. Unlike Python, MATLAB dependencies are
+# installed via the MathWorks installer or the Add-On Explorer, not by a
+# package manager. This file is informational: it lists every external
+# dependency the pipeline needs to run end-to-end. To verify that your
+# local machine satisfies all of these, run:
+#
+#     ./scripts/run.sh smoke
+#
+# which includes explicit toolbox-availability checks.
+
+# =============================================================================
+# Runtime
+# =============================================================================
+matlab                                 >= R2023a   # tested on R2023b (9.15)
+
+# =============================================================================
+# Required MathWorks toolboxes
+# =============================================================================
+# Signal Processing Toolbox
+#   functions used : filtfilt, butter, xcorr
+#   note           : 60 Hz notch uses an in-repo biquad implementation
+#                    (src/utils/build_notch_filter.m) to avoid a DSP
+#                    System Toolbox dependency (iirnotch /
+#                    designNotchPeakIIR both live there).
+#   used by        : src/utils/load_and_filter.m
+#                    src/utils/build_bandpass_filter.m
+#                    src/utils/build_notch_filter.m
+#                    src/analysis/connectivity_xcorr.m
+#                    src/figures/fig_connectivity_exemplar.m
+#   required for   : preprocess_and_save, all connectivity analysis
+signal_processing_toolbox              >= 9.2      # R2023a ships 9.2
+
+# Statistics and Machine Learning Toolbox
+#   functions used : signrank, tiedrank, ksdensity, prctile, chi2cdf
+#   used by        : src/analysis/paired_stats.m        (signrank, tiedrank)
+#                    src/figures/fig_connectivity_summary.m (ksdensity, prctile)
+#                    src/figures/fig_stats_bootstrap.m       (prctile)
+#                    src/figures/fig_rate_change_bar.m       (chi2cdf)
+#                    src/utils/plot_pct_change_violin.m      (ksdensity)
+#   required for   : all statistical reporting, KDE panels, rate-change bar
+statistics_and_machine_learning_toolbox >= 12.5    # R2023a ships 12.5
+
+# =============================================================================
+# Vendored (shipped in-tree, no separate install required)
+# =============================================================================
+# Tucker-Davis Technologies MATLAB SDK
+#   path           : <repo>/TDTMatlabSDK/
+#   functions used : TDTbin2mat, TDTthresh
+#   used by        : src/utils/load_and_filter.m
+#                    src/utils/detect_spikes.m
+#                    src/pipeline/preprocess_and_save.m
+#   added to path  : automatically by preprocess_and_save via
+#                    addpath(genpath(cfg.paths.tdt_sdk))
+tdt_matlab_sdk                          == vendored # see TDTMatlabSDK/
+
+# =============================================================================
+# Optional
+# =============================================================================
+# Brain Connectivity Toolbox (Rubinov & Sporns 2010)
+#   homepage      : https://sites.google.com/site/bctnet/
+#   canonical git : https://github.com/brainlife/BCT
+#   status        : NOT currently required. network_metrics.m provides
+#                   native implementations of density, clustering, path
+#                   length, global efficiency, modularity, and
+#                   small-worldness sigma. Vendor BCT at
+#                   src/external/BCT/ only if you want literal BCT
+#                   citations in the paper or BCT-implemented
+#                   rich-club / assortativity metrics.
+brain_connectivity_toolbox             >= 2019.03.03  # optional
+
+# =============================================================================
+# NOT required (installed on test machine but unused)
+# =============================================================================
+# image_processing_toolbox               # unused
+# parallel_computing_toolbox             # unused
+
+# =============================================================================
+# Install notes (macOS / Linux / Windows)
+# =============================================================================
+# 1. Install MATLAB R2023a or later from https://www.mathworks.com/downloads/
+# 2. During the installer, select BOTH:
+#      [x] Signal Processing Toolbox
+#      [x] Statistics and Machine Learning Toolbox
+#    Or add them later via the MATLAB Add-On Explorer (HOME > Add-Ons).
+# 3. Clone this repository. The TDT MATLAB SDK is already included at
+#    TDTMatlabSDK/; no separate download is needed.
+# 4. Verify the install with:
+#      ./scripts/run.sh smoke
+#    The final line should read "Result: 38 PASS, 0 FAIL".
+# 5. Run the pipeline:
+#      ./scripts/run.sh preprocess doi
+#      ./scripts/run.sh figures    doi
+#
+# See scripts/run.sh --help for the full command list.

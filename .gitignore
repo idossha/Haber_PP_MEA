@@ -1,0 +1,38 @@
+# === Data & outputs (large / generated) ===
+data/
+.data/
+cache/
+figures_out/
+logs/
+
+# === Manuscript & literature (not code) ===
+paper/
+literature/
+docs/
+Tracks/
+tmp/
+PLAN.md
+TODO.md
+
+# === Third-party SDK (not ours to distribute) ===
+TDTMatlabSDK/
+
+# === Claude / AI agent config ===
+.claude/
+
+# === Legacy archive scripts ===
+src/archive/
+
+# === OS / IDE junk ===
+.DS_Store
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+*.asv
+
+# === MATLAB temporaries ===
+*.mex*
+*.slxc
+slprj/
