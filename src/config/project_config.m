@@ -193,7 +193,7 @@ cfg.outlier.mean_multiplier  = 15;
 %                      figures.
 cfg.pct.max_include            = 1000;
 cfg.pct.exclude_silenced       = false;
-cfg.pct.pct_ylim               = [-100 500];    % primary
+cfg.pct.pct_ylim               = [-100 300];    % primary (tightened for publication)
 cfg.pct.violin_ylim_supplement = [-100 1000];   % supplementary view
 
 % =========================================================================

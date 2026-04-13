@@ -59,15 +59,37 @@ function plot_paired_lines(yBaseline, yTreatment, colors, statsString, outFile, 
         yTreatPlot = yTreatment;
     end
 
+    % --- Robust display filter (BEFORE drawing) ----------------------------
+    % Exclude extreme channel pairs from the PLOT so nothing is clipped.
+    % All data remain in the statistical analysis (done separately).
+    yAll  = [yBaseline; yTreatment];
+    ymax = robust_ymax(yAll, opt.yLimitMode);
+
+    % For log scale, the compression handles extremes — skip Tukey filter.
+    % For linear scale, apply Tukey filter to exclude extreme pairs.
+    if strcmpi(opt.yLimitMode, 'robust') && ~strcmpi(opt.yScale, 'log')
+        keep = yBasePlot <= ymax & yTreatPlot <= ymax;
+        nClipped = sum(~keep);
+        if nClipped > 0
+            fprintf('  display clip: hiding %d/%d pairs above y=%.0f\n', ...
+                nClipped, nCh, ymax);
+            yBaseline  = yBaseline(keep);
+            yTreatment = yTreatment(keep);
+            yBasePlot  = yBasePlot(keep);
+            yTreatPlot = yTreatPlot(keep);
+            xBaseline  = xBaseline(keep);
+            xTreatment = xTreatment(keep);
+            nCh = sum(keep);
+            yAll = [yBaseline; yTreatment];
+        end
+    end
+
     fig = figure('Visible', 'off', 'Position', [100, 100, 720, 720], 'Color', 'w');
     set(fig, 'Units', 'inches', 'PaperUnits', 'inches', ...
         'PaperSize', [7.2 7.2], 'PaperPosition', [0 0 7.2 7.2]);
     hold on;
 
-    % Half-violin densities behind dots. For log scale, compute the KDE
-    % in log space on the clamped data so the shape reflects the log
-    % distribution.
-    yAll  = [yBaseline; yTreatment];
+    % Half-violin densities behind dots.
     if strcmpi(opt.yScale, 'log')
         yAllPlot = [yBasePlot; yTreatPlot];
         yGrid = logspace(log10(min(yAllPlot)), log10(max(yAllPlot) + eps), 120);
@@ -103,26 +125,35 @@ function plot_paired_lines(yBaseline, yTreatment, colors, statsString, outFile, 
     % Connecting lines (store handles to build a legend).
     hIncrease = gobjects(0);
     hDecrease = gobjects(0);
+    % Scale line width and alpha by channel count for readability
+    if nCh > 100
+        lw = 0.7;  lineAlpha = 0.35;  dotSize = 30;  dotAlpha = 0.35;
+    elseif nCh > 50
+        lw = 0.9;  lineAlpha = 0.45;  dotSize = 50;  dotAlpha = 0.5;
+    else
+        lw = 1.2;  lineAlpha = 0.7;   dotSize = 76;  dotAlpha = colors.alphaDots;
+    end
+
     for i = 1:nCh
         if yTreatment(i) > yBaseline(i)
-            lc = colors.increase;
+            lc = [colors.increase, lineAlpha];
             hLn = plot([xBaseline(i), xTreatment(i)], ...
                        [yBasePlot(i), yTreatPlot(i)], ...
-                       'Color', lc, 'LineWidth', 1.2);
+                       'Color', lc, 'LineWidth', lw);
             if isempty(hIncrease); hIncrease = hLn; end
         else
-            lc = colors.decrease;
+            lc = [colors.decrease, lineAlpha];
             hLn = plot([xBaseline(i), xTreatment(i)], ...
                        [yBasePlot(i), yTreatPlot(i)], ...
-                       'Color', lc, 'LineWidth', 1.2);
+                       'Color', lc, 'LineWidth', lw);
             if isempty(hDecrease); hDecrease = hLn; end
         end
     end
 
-    scatter(xBaseline,  yBasePlot,  76, colors.baseline,  'filled', ...
-        'MarkerFaceAlpha', colors.alphaDots);
-    scatter(xTreatment, yTreatPlot, 76, colors.treatment, 'filled', ...
-        'MarkerFaceAlpha', colors.alphaDots);
+    scatter(xBaseline,  yBasePlot,  dotSize, colors.baseline,  'filled', ...
+        'MarkerFaceAlpha', dotAlpha);
+    scatter(xTreatment, yTreatPlot, dotSize, colors.treatment, 'filled', ...
+        'MarkerFaceAlpha', dotAlpha);
 
     plot_mean_iqr_marker(gca, xSummaryBaseline,  yBasePlot,  0.0035, 0.85, 5);
     plot_mean_iqr_marker(gca, xSummaryTreatment, yTreatPlot, 0.0035, 0.85, 5);
@@ -132,7 +163,6 @@ function plot_paired_lines(yBaseline, yTreatment, colors, statsString, outFile, 
     xticks([1, 1.22]);
     xticklabels(opt.xTickLabels);
 
-    ymax = robust_ymax(yAll, opt.yLimitMode);
     if strcmpi(opt.yScale, 'log')
         % Floor so that log scale is well defined; anything below yFloor
         % is drawn AT yFloor (these are 'silent' channels under a
@@ -220,13 +250,7 @@ function ymax = robust_ymax(y, mode)
             q1 = prctile(y, 25);
             q3 = prctile(y, 75);
             upperFence = q3 + 1.5 * (q3 - q1);
-            p975 = prctile(y, 97.5) * 1.3;
-            medFloor = max(0.001, median(y) * 4);
-            ymax = max([upperFence, p975, medFloor]);
-            dataMax = max(y);
-            if ymax > dataMax
-                ymax = dataMax;
-            end
+            ymax = upperFence;
             if ymax <= 0
                 ymax = max(y);
             end

@@ -4,11 +4,12 @@ function [results, summaryTable, stats] = fig_connectivity_summary(study, vararg
 %   [results, summary, stats] = FIG_CONNECTIVITY_SUMMARY(study) runs
 %   run_connectivity on every pair of STUDY ('doi' or 'ket'), extracts
 %   the graph-theoretic network metrics, and renders a composite figure
-%   following the Sharf 2022 / Downes 2012 / Varley 2024 template:
+%   (v1.1 layout):
 %
-%     Row 1  - Network-metric slope plots (one panel per metric,
-%              paired per-well lines + group median + 95% bootstrap CI)
-%     Row 2  - Spatial decay  |  edge-weight KDE
+%     Panel 1  - Paired dot plot: characteristic path length
+%     Panel 2  - Paired dot plot: modularity Q
+%     Panel 3  - Forest plot: effect sizes (Hedges' g) for all 6 metrics
+%     Panel 4  - Spatial decay of functional connectivity
 %
 %   Every network-level metric is also run through paired_stats() so
 %   the function returns a fully-populated stats struct array that can
@@ -97,9 +98,10 @@ function [results, summaryTable, stats] = fig_connectivity_summary(study, vararg
 
     summaryTable = build_summary_table(results, labels);
 
+    % All six metrics: the two featured panels + four for the forest plot.
     metricSpecs = {
         'density',              'Edge density'
-        'clusteringMean',       'Clustering coefficient'
+        'clusteringMean',       'Clustering coeff.'
         'meanShortestPath',     'Char. path length'
         'smallWorldnessSigma',  'Small-worldness \sigma'
         'globalEfficiency',     'Global efficiency'
@@ -127,28 +129,27 @@ function [results, summaryTable, stats] = fig_connectivity_summary(study, vararg
         stats(m).summary.bootstrap.significantBH = rejected(m);
     end
 
-    % --- Figure layout --------------------------------------------------
+    % --- Figure layout (v1.1: 1x4 combined) ----------------------------
+    % Panel 1: path length paired | Panel 2: modularity paired
+    % Panel 3: forest plot (all 6 metrics) | Panel 4: spatial decay
     colors = paired_plot_colors(study);
-    fig = figure('Visible', 'off', 'Color', 'w', 'Position', [100 100 1500 1000]);
-    tl = tiledlayout(fig, 3, 3, 'Padding', 'compact', 'TileSpacing', 'compact');
-    title(tl, sprintf('Connectivity effects: %s vs %s (n = %d pairs)', ...
-          labels.baseline, labels.treatment, numel(results)));
+    fig = figure('Visible', 'off', 'Color', 'w', 'Position', [100 100 1600 480]);
+    tl = tiledlayout(fig, 1, 4, 'Padding', 'compact', 'TileSpacing', 'compact');
 
-    % Row 1-2 : 6 network-metric slope plots
-    for m = 1:numel(stats)
-        ax = nexttile(tl, m);
-        plot_paired_metric(ax, stats(m), colors, labels);
-    end
+    idxPL  = find(strcmp({stats.metric}, 'meanShortestPath'));
+    idxMod = find(strcmp({stats.metric}, 'modularity'));
 
-    % Row 3 : spatial decay + edge-weight histogram + (empty for padding)
-    axDecay = nexttile(tl, 7);
-    plot_spatial_decay(axDecay, results, colors, labels);
+    ax1 = nexttile(tl, 1);
+    plot_paired_panel(ax1, stats(idxPL), labels, colors);
 
-    axHist = nexttile(tl, 8);
-    plot_edge_weight_kde(axHist, results, colors, labels);
+    ax2 = nexttile(tl, 2);
+    plot_paired_panel(ax2, stats(idxMod), labels, colors);
 
-    axLegend = nexttile(tl, 9);
-    render_summary_text(axLegend, stats, opt);
+    ax3 = nexttile(tl, 3);
+    plot_forest(ax3, stats, colors);
+
+    ax4 = nexttile(tl, 4);
+    plot_spatial_decay(ax4, results, colors, labels);
 
     if ~exist(cfg.paths.figures_out, 'dir')
         mkdir(cfg.paths.figures_out);
@@ -264,54 +265,149 @@ function T = build_summary_table(results, labels)
 end
 
 % =========================================================================
-function plot_paired_metric(ax, stat, colors, labels)
+function plot_paired_panel(ax, stat, labels, colors)
+%PLOT_PAIRED_PANEL  Refined paired dot plot with IQR shading and bracket.
+    hold(ax, 'on');
     bVals = stat.baselineVals;
     tVals = stat.treatmentVals;
     n = numel(bVals);
 
-    hold(ax, 'on');
+    % Deterministic jitter based on rank order
+    jit = linspace(-0.04, 0.04, n)';
+
+    % IQR shading
+    bIQR = [prctile(bVals, 25), prctile(bVals, 75)];
+    tIQR = [prctile(tVals, 25), prctile(tVals, 75)];
+    fill(ax, [0.7 1.3 1.3 0.7], [bIQR(1) bIQR(1) bIQR(2) bIQR(2)], ...
+        colors.baseline, 'FaceAlpha', 0.12, 'EdgeColor', 'none');
+    fill(ax, [1.7 2.3 2.3 1.7], [tIQR(1) tIQR(1) tIQR(2) tIQR(2)], ...
+        colors.treatment, 'FaceAlpha', 0.12, 'EdgeColor', 'none');
+
+    % Paired connecting lines
     for k = 1:n
         if isnan(bVals(k)) || isnan(tVals(k)); continue; end
-        if tVals(k) > bVals(k); col = [0.1 0.55 0.25];
-        elseif tVals(k) < bVals(k); col = [0.75 0.20 0.20];
-        else; col = [0.7 0.7 0.7]; end
-        plot(ax, [1 2], [bVals(k) tVals(k)], '-', ...
-            'Color', [col 0.6], 'LineWidth', 1);
-    end
-    scatter(ax, ones(n,1),    bVals, 60, 'filled', ...
-        'MarkerFaceColor', colors.baseline,  'MarkerEdgeColor', 'k');
-    scatter(ax, 2*ones(n,1),  tVals, 60, 'filled', ...
-        'MarkerFaceColor', colors.treatment, 'MarkerEdgeColor', 'k');
-
-    if any(~isnan(bVals))
-        plot(ax, 1, mean(bVals, 'omitnan'), 'kd', 'MarkerFaceColor', 'k', 'MarkerSize', 8);
-    end
-    if any(~isnan(tVals))
-        plot(ax, 2, mean(tVals, 'omitnan'), 'kd', 'MarkerFaceColor', 'k', 'MarkerSize', 8);
-    end
-
-    % Annotate significance marker from BH-adjusted hierarchical bootstrap.
-    yMax = max([bVals; tVals], [], 'omitnan');
-    if ~isempty(stat.summary) && ~isnan(stat.summary.bootstrap.pDelta)
-        pStr = format_p(stat.summary.bootstrap.pDelta);
-        if isfield(stat.summary.bootstrap, 'pDeltaBHFDR') && stat.summary.bootstrap.significantBH
-            pStr = ['*' pStr];
+        if tVals(k) > bVals(k)
+            lc = [colors.increase 0.6];
+        else
+            lc = [colors.decrease 0.6];
         end
-        text(ax, 1.5, yMax, pStr, 'HorizontalAlignment', 'center', ...
-            'VerticalAlignment', 'bottom');
+        plot(ax, [1+jit(k) 2+jit(k)], [bVals(k) tVals(k)], '-', ...
+            'Color', lc, 'LineWidth', 1.4);
     end
+
+    % Dots
+    scatter(ax, 1+jit, bVals, 70, colors.baseline, 'filled', ...
+        'MarkerFaceAlpha', 0.8, 'MarkerEdgeColor', [0.3 0.3 0.3], 'LineWidth', 0.6);
+    scatter(ax, 2+jit, tVals, 70, colors.treatment, 'filled', ...
+        'MarkerFaceAlpha', 0.8, 'MarkerEdgeColor', [0.3 0.3 0.3], 'LineWidth', 0.6);
+
+    % Median diamonds
+    plot(ax, 1, median(bVals, 'omitnan'), 'kd', 'MarkerFaceColor', 'k', 'MarkerSize', 8);
+    plot(ax, 2, median(tVals, 'omitnan'), 'kd', 'MarkerFaceColor', 'k', 'MarkerSize', 8);
+
+    % Significance bracket
+    yMax = max([bVals; tVals], [], 'omitnan');
+    yBracket = yMax * 1.08;
+    sigBH = isfield(stat.summary.bootstrap, 'significantBH') && ...
+            stat.summary.bootstrap.significantBH;
+    if sigBH; star = '*'; else; star = 'n.s.'; end
+    plot(ax, [1 2], [yBracket yBracket], 'k-', 'LineWidth', 0.8);
+    text(ax, 1.5, yBracket * 1.01, star, ...
+        'HorizontalAlignment', 'center', 'FontSize', 13, ...
+        'FontName', 'Arial', 'FontWeight', 'bold');
+
+    % P-value and effect size below bracket
+    pBoot = stat.summary.bootstrap.pDelta;
+    if pBoot < 0.001; pStr = 'p < .001';
+    else; pStr = sprintf('p = %.3f', pBoot); end
+    gStr = sprintf('g = %.2f', stat.summary.hedgesGav);
+    text(ax, 1.5, yBracket * 1.07, {pStr, gStr}, ...
+        'HorizontalAlignment', 'center', 'FontSize', 8, ...
+        'FontName', 'Arial', 'Color', [0.35 0.35 0.35]);
 
     set(ax, 'XTick', [1 2], 'XTickLabel', {labels.baseline, labels.treatment});
-    xlim(ax, [0.5 2.5]);
-    ylabel(ax, stat.label);
-    box(ax, 'on');
+    xlim(ax, [0.4 2.6]);
+    yPad = (yBracket * 1.12 - min([bVals; tVals], [], 'omitnan')) * 0.02;
+    ylim(ax, [min([bVals; tVals], [], 'omitnan') - yPad, yBracket * 1.12]);
+    ylabel(ax, stat.label, 'FontSize', 11, 'FontWeight', 'bold');
+    set(ax, 'FontSize', 10, 'FontName', 'Arial', 'TickDir', 'out', ...
+        'LineWidth', 1, 'Box', 'off');
+    hold(ax, 'off');
+end
+
+% =========================================================================
+function plot_forest(ax, statsArr, colors)
+%PLOT_FOREST  Horizontal forest plot of effect sizes for all metrics.
+    hold(ax, 'on');
+    nMetrics = numel(statsArr);
+
+    gVals    = arrayfun(@(s) s.summary.hedgesGav, statsArr);
+    medDelta = arrayfun(@(s) s.summary.medianDelta, statsArr);
+    ciLo     = arrayfun(@(s) s.summary.bootstrap.ciDelta(1), statsArr);
+    ciHi     = arrayfun(@(s) s.summary.bootstrap.ciDelta(2), statsArr);
+
+    % Convert delta CI to g-scale
+    ciLoG = nan(1, nMetrics);
+    ciHiG = nan(1, nMetrics);
+    for m = 1:nMetrics
+        if abs(gVals(m)) > 0.001 && abs(medDelta(m)) > eps
+            pooledSD = abs(medDelta(m)) / abs(gVals(m));
+        else
+            pooledSD = std([statsArr(m).baselineVals; statsArr(m).treatmentVals], 'omitnan');
+            if pooledSD < eps; pooledSD = 1; end
+        end
+        ciLoG(m) = ciLo(m) / pooledSD;
+        ciHiG(m) = ciHi(m) / pooledSD;
+    end
+
+    yPos = 1:nMetrics;
+
+    % Zero reference line
+    xline(ax, 0, '-', 'Color', [0.7 0.7 0.7], 'LineWidth', 0.8);
+
+    % Negligible-effect zone (|g| < 0.2)
+    fill(ax, [-0.2 0.2 0.2 -0.2], [0 0 nMetrics+1 nMetrics+1], ...
+        [0.96 0.96 0.96], 'EdgeColor', 'none');
+
+    for m = 1:nMetrics
+        y = yPos(m);
+        g = gVals(m);
+        sigBH = isfield(statsArr(m).summary.bootstrap, 'significantBH') && ...
+                statsArr(m).summary.bootstrap.significantBH;
+
+        % CI whisker
+        plot(ax, [ciLoG(m) ciHiG(m)], [y y], '-', ...
+            'Color', [0.45 0.45 0.45], 'LineWidth', 1.8);
+
+        % Marker: diamond if significant, circle if not
+        if sigBH
+            scatter(ax, g, y, 110, colors.treatment, 'filled', 'd', ...
+                'MarkerEdgeColor', 'k', 'LineWidth', 1);
+        else
+            scatter(ax, g, y, 70, [0.6 0.6 0.6], 'filled', 'o', ...
+                'MarkerEdgeColor', [0.4 0.4 0.4]);
+        end
+    end
+
+    set(ax, 'YTick', yPos, 'YTickLabel', {statsArr.label});
+    ylim(ax, [0.4 nMetrics + 0.6]);
+    xlabel(ax, 'Hedges'' g_{av}', 'FontSize', 10, 'FontWeight', 'bold');
+    title(ax, 'Effect sizes (all metrics)', 'FontSize', 11, 'FontWeight', 'bold');
+    set(ax, 'FontSize', 9, 'FontName', 'Arial', 'TickDir', 'out', ...
+        'LineWidth', 1, 'Box', 'off');
+
+    % Legend
+    h1 = scatter(ax, NaN, NaN, 90, colors.treatment, 'filled', 'd', 'MarkerEdgeColor', 'k');
+    h2 = scatter(ax, NaN, NaN, 60, [0.6 0.6 0.6], 'filled', 'o', 'MarkerEdgeColor', [0.4 0.4 0.4]);
+    legend(ax, [h1 h2], {'BH-FDR sig.', 'Not sig.'}, ...
+        'Location', 'southeast', 'Box', 'off', 'FontSize', 8);
+
     hold(ax, 'off');
 end
 
 % =========================================================================
 function plot_spatial_decay(ax, results, colors, labels)
-% Scatter and binned-median of |weight| vs inter-electrode distance,
-% pooled across pairs.
+% Binned-median of |weight| vs inter-electrode distance, pooled across pairs.
     layout = mea60_layout();
     D = layout.distanceMatrix;
     upperMask = triu(true(size(D)), 1);
@@ -332,33 +428,24 @@ function plot_spatial_decay(ax, results, colors, labels)
 
     hold(ax, 'on');
     edges = 0:1:8;
-    [bMean, bLo, bHi] = binned_ci(repDist, abs(bW), edges);
-    [tMean, tLo, tHi] = binned_ci(repDist, abs(tW), edges);
+    [bMed, bLo, bHi] = binned_ci(repDist, abs(bW), edges);
+    [tMed, tLo, tHi] = binned_ci(repDist, abs(tW), edges);
     ctrs = edges(1:end-1) + diff(edges)/2;
 
     fill(ax, [ctrs fliplr(ctrs)], [bLo fliplr(bHi)], colors.baseline, ...
         'FaceAlpha', 0.18, 'EdgeColor', 'none');
     fill(ax, [ctrs fliplr(ctrs)], [tLo fliplr(tHi)], colors.treatment, ...
         'FaceAlpha', 0.18, 'EdgeColor', 'none');
-    plot(ax, ctrs, bMean, '-', 'Color', colors.baseline,  'LineWidth', 2);
-    plot(ax, ctrs, tMean, '-', 'Color', colors.treatment, 'LineWidth', 2);
+    plot(ax, ctrs, bMed, 'o-', 'Color', colors.baseline,  'LineWidth', 2, 'MarkerSize', 5, 'MarkerFaceColor', colors.baseline);
+    plot(ax, ctrs, tMed, 's-', 'Color', colors.treatment, 'LineWidth', 2, 'MarkerSize', 5, 'MarkerFaceColor', colors.treatment);
 
-    xlabel(ax, 'Inter-electrode distance (100 \mum units)');
-    ylabel(ax, '|peak cross-correlation|  (log scale)');
-    title(ax, 'Spatial decay of functional connectivity', 'FontWeight', 'bold');
-    legend(ax, {[labels.baseline ' IQR'], [labels.treatment ' IQR'], ...
-                labels.baseline, labels.treatment}, ...
-        'Location', 'northeast', 'Box', 'off');
-    % Log Y reveals the exponential decay otherwise hidden by the near-zero
-    % floor.
-    set(ax, 'YScale', 'log');
-    posMask = [bMean tMean bLo tLo bHi tHi];
-    posMask = posMask(posMask > 0);
-    if ~isempty(posMask)
-        lo = min(posMask) * 0.7;
-        hi = max(posMask) * 1.3;
-        ylim(ax, [lo, hi]);
-    end
+    xlabel(ax, 'Inter-electrode distance (100 \mum)', 'FontSize', 10, 'FontWeight', 'bold');
+    ylabel(ax, '|Cross-correlation peak|', 'FontSize', 10, 'FontWeight', 'bold');
+    title(ax, 'Spatial decay', 'FontSize', 11, 'FontWeight', 'bold');
+    legend(ax, {labels.baseline, labels.treatment}, ...
+        'Location', 'northeast', 'Box', 'off', 'FontSize', 8);
+    set(ax, 'FontSize', 9, 'FontName', 'Arial', 'TickDir', 'out', ...
+        'LineWidth', 1, 'Box', 'off');
     hold(ax, 'off');
 end
 
@@ -374,88 +461,6 @@ function [m, lo, hi] = binned_ci(x, y, edges)
         m(b)  = median(v);
         lo(b) = prctile(v, 25);
         hi(b) = prctile(v, 75);
-    end
-end
-
-% =========================================================================
-function plot_edge_weight_kde(ax, results, colors, labels)
-% Kernel-density estimates of the pooled edge-weight distribution for
-% baseline vs treatment.
-    bW = []; tW = [];
-    for k = 1:numel(results)
-        bA = results(k).baseline.adjacency;
-        tA = results(k).treatment.adjacency;
-        upperMask = triu(true(size(bA)), 1);
-        bW = [bW; bA(upperMask)]; %#ok<AGROW>
-        tW = [tW; tA(upperMask)]; %#ok<AGROW>
-    end
-    bW = bW(~isnan(bW));
-    tW = tW(~isnan(tW));
-
-    if isempty(bW) || isempty(tW)
-        text(ax, 0.5, 0.5, 'No data', 'HorizontalAlignment', 'center');
-        axis(ax, 'off');
-        return;
-    end
-
-    % Log-X axis: negative and zero edges are dropped for the KDE.
-    bPos = bW(bW > 0);
-    tPos = tW(tW > 0);
-    if isempty(bPos) || isempty(tPos)
-        text(ax, 0.5, 0.5, 'No positive edges', 'HorizontalAlignment', 'center');
-        axis(ax, 'off');
-        return;
-    end
-    xMin = min([bPos; tPos]);
-    xMax = max([bPos; tPos]);
-    % KDE in log space: evaluate density at log10(weight).
-    pts = logspace(log10(xMin), log10(xMax), 200);
-    fB = ksdensity(log10(bPos), log10(pts));
-    fT = ksdensity(log10(tPos), log10(pts));
-
-    hold(ax, 'on');
-    fill(ax, [pts fliplr(pts)], [fB zeros(size(pts))], colors.baseline, ...
-        'FaceAlpha', 0.35, 'EdgeColor', colors.baseline, 'LineWidth', 1.5);
-    fill(ax, [pts fliplr(pts)], [fT zeros(size(pts))], colors.treatment, ...
-        'FaceAlpha', 0.35, 'EdgeColor', colors.treatment, 'LineWidth', 1.5);
-    xlabel(ax, 'Edge weight  (log scale)');
-    ylabel(ax, 'Density (log_{10} weight)');
-    title(ax, 'Edge-weight distribution', 'FontWeight', 'bold');
-    set(ax, 'XScale', 'log');
-    legend(ax, {labels.baseline, labels.treatment}, ...
-        'Location', 'northeast', 'Box', 'off');
-    hold(ax, 'off');
-end
-
-% =========================================================================
-function render_summary_text(ax, stats, opt)
-    axis(ax, 'off');
-    lines = {};
-    lines{end+1} = sprintf('\\bf Statistics summary');
-    lines{end+1} = '';
-    lines{end+1} = sprintf('Bin = %g ms', opt.binMs);
-    lines{end+1} = sprintf('Max lag = %g ms', opt.maxLagMs);
-    if isempty(opt.edgeThreshold)
-        lines{end+1} = sprintf('Edge density target = %.2f', opt.edgeDensity);
-    else
-        lines{end+1} = sprintf('Edge threshold (abs.) = %.2g', opt.edgeThreshold);
-    end
-    lines{end+1} = '';
-    lines{end+1} = 'Metric  |  pBoot  |  pBH  |  g_{av}';
-    for m = 1:numel(stats)
-        s = stats(m).summary;
-        pB = s.bootstrap.pDelta;
-        pA = s.bootstrap.pDeltaBHFDR;
-        g  = s.hedgesGav;
-        lines{end+1} = sprintf('%s  |  %s  |  %s  |  %.2f', ...
-            stats(m).label, format_p(pB), format_p(pA), g); %#ok<AGROW>
-    end
-    y = 0.97;
-    dy = 0.065;
-    for k = 1:numel(lines)
-        text(ax, 0.02, y, lines{k}, 'FontName', 'Menlo', 'FontSize', 9, ...
-            'Interpreter', 'tex');
-        y = y - dy;
     end
 end
 

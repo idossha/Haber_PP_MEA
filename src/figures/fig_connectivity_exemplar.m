@@ -81,9 +81,6 @@ function fig_connectivity_exemplar(study, varargin)
     fig = figure('Visible', 'off', 'Color', 'w', 'Position', [100 100 1500 1100]);
 
     tl = tiledlayout(fig, 3, 3, 'Padding', 'compact', 'TileSpacing', 'compact');
-    title(tl, sprintf('Functional connectivity: %s vs %s (%s)', ...
-          labels.baseline, labels.treatment, pair.baseline), ...
-          'Interpreter', 'none');
 
     % ===== Panel A — two exemplar cross-correlograms ===================
     % Pick two pairs: (1) strongest baseline edge, (2) largest positive delta.
@@ -104,12 +101,6 @@ function fig_connectivity_exemplar(study, varargin)
 
     axLegend = nexttile(tl, 3);
     axis(axLegend, 'off');
-    text(axLegend, 0.05, 0.92, sprintf('study: %s', study), 'FontWeight', 'bold');
-    text(axLegend, 0.05, 0.78, sprintf('pair #%d / %d', pairIdx, numel(pairs)));
-    text(axLegend, 0.05, 0.66, sprintf('bin = %g ms', opt.binMs));
-    text(axLegend, 0.05, 0.54, sprintf('max lag = %g ms', opt.maxLagMs));
-    text(axLegend, 0.05, 0.42, sprintf('norm: %s', opt.normalization));
-    text(axLegend, 0.05, 0.30, sprintf('edge threshold: top %.0f%%', opt.edgeThresholdPct));
 
     % ===== Panel B — adjacency heatmaps =================================
     axB1 = nexttile(tl, 4);
@@ -128,7 +119,7 @@ function fig_connectivity_exemplar(study, varargin)
         'nodeMetric',       bRates, ...
         'edgeMode',         'weight', ...
         'edgeThresholdPct', opt.edgeThresholdPct, ...
-        'title',            sprintf('%s network (nodes = spikes/min)', labels.baseline));
+        'title',            sprintf('%s network (nodes = spikes min^{-1})', labels.baseline));
 
     axC2 = nexttile(tl, 8);
     plot_network_on_mea(tRes.adjacency, ...
@@ -136,7 +127,7 @@ function fig_connectivity_exemplar(study, varargin)
         'nodeMetric',       tRates, ...
         'edgeMode',         'weight', ...
         'edgeThresholdPct', opt.edgeThresholdPct, ...
-        'title',            sprintf('%s network (nodes = spikes/min)', labels.treatment));
+        'title',            sprintf('%s network (nodes = spikes min^{-1})', labels.treatment));
 
     axC3 = nexttile(tl, 9);
     deltaRates = tRates - bRates;

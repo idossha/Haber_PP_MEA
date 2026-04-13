@@ -139,12 +139,11 @@ function fig_rate_change_bar(metric, study, varargin)
 
     [~, labels] = get_pairs_and_labels(cfg, study);
     if strcmp(metric, 'spike')
-        metricName = 'spike rate';
+        metricName = 'Firing rate';
     else
-        metricName = 'burst rate';
+        metricName = 'Burst rate';
     end
-    titleText = sprintf('%s: %s vs %s channel categories (n = %d recordings)', ...
-        metricName, labels.baseline, labels.treatment, numel(pctSil));
+    titleText = '';
 
     plot_change_category_box(pctSil, pctDec, pctInc, nUnchanged, outFile, ...
         'title',  titleText, ...

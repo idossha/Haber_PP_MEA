@@ -80,7 +80,7 @@ function fig_spike_pct_change_violin(study, varargin)
     outFile = fullfile(cfg.paths.figures_out, sprintf('%s_spike_pct_change_violin.png', study));
 
     plot_pct_change_violin(pctAll, colors, labels.treatment, ...
-        'Percent change in spike rate (%)', opt.pctYlim, outFile);
+        'Percent change in firing rate (%)', opt.pctYlim, outFile);
 
     fprintf('fig_spike_pct_change_violin(%s): saved %s\n', study, outFile);
 
