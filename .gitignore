@@ -2,7 +2,7 @@
 data/
 .data/
 cache/
-figures_out/
+figures/
 logs/
 
 # === Manuscript & literature (not code) ===
