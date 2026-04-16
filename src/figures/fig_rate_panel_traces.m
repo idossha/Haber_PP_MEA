@@ -167,7 +167,7 @@ function fig_rate_panel_traces(study, varargin)
     % Taller figure so individual trace rows get ~160 px each at screen
     % resolution (Chiappalone-style; individual spike waveforms remain
     % visible instead of collapsing into a solid bar).
-    fig = figure('Visible', 'off', 'Color', 'w', 'Position', [100 100 1900 1800]);
+    fig = create_panel_figure(18.0, 8.0);
 
     % --- Group titles ---------------------------------------------------
     hdrB = xB1 + (wZoom + zoomFullGap + wFull) / 2;
@@ -246,6 +246,9 @@ function fig_rate_panel_traces(study, varargin)
     annotation(fig, 'textbox', [xT2, 0.008, wFull, 0.04], ...
         'String', '60 s', 'EdgeColor', 'none', ...
         'HorizontalAlignment', 'left', 'FontSize', 16, 'FontWeight', 'bold');
+
+    % --- Nature/NPP styling -----------------------------------------------
+    apply_nature_style(fig);
 
     % --- Save -----------------------------------------------------------
     if ~exist(cfg.paths.figures_out, 'dir')

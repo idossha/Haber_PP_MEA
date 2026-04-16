@@ -133,7 +133,7 @@ function [results, summaryTable, stats] = fig_connectivity_summary(study, vararg
     % Panel 1: path length paired | Panel 2: modularity paired
     % Panel 3: forest plot (all 6 metrics) | Panel 4: spatial decay
     colors = paired_plot_colors(study);
-    fig = figure('Visible', 'off', 'Color', 'w', 'Position', [100 100 1600 480]);
+    fig = create_panel_figure(18.0, 3.6);
     tl = tiledlayout(fig, 1, 4, 'Padding', 'compact', 'TileSpacing', 'compact');
 
     idxPL  = find(strcmp({stats.metric}, 'meanShortestPath'));
@@ -150,6 +150,9 @@ function [results, summaryTable, stats] = fig_connectivity_summary(study, vararg
 
     ax4 = nexttile(tl, 4);
     plot_spatial_decay(ax4, results, colors, labels);
+
+    % --- Nature/NPP styling -----------------------------------------------
+    apply_nature_style(fig);
 
     if ~exist(cfg.paths.figures_out, 'dir')
         mkdir(cfg.paths.figures_out);

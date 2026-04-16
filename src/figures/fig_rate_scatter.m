@@ -58,9 +58,7 @@ function fig_rate_scatter(metric, study, varargin)
     colors = paired_plot_colors(study);
 
     % --- Figure ---
-    fig = figure('Visible', 'off', 'Position', [100 100 700 700], 'Color', 'w');
-    set(fig, 'Units', 'inches', 'PaperUnits', 'inches', ...
-        'PaperSize', [7 7], 'PaperPosition', [0 0 7 7]);
+    fig = create_panel_figure(5.8, 4.4);
     hold on;
 
     % Floor for log scale: replace zeros with a small positive value.
@@ -90,7 +88,7 @@ function fig_rate_scatter(metric, study, varargin)
     axis square;
 
     % Scatter: color each point by increase/decrease
-    dotSize  = 50;
+    dotSize  = 20;
     dotAlpha = 0.8;
     pointColor = repmat(colors.decrease, nCh, 1);
     pointColor(increased, :) = repmat(colors.increase, nInc, 1);
@@ -104,15 +102,10 @@ function fig_rate_scatter(metric, study, varargin)
     legend([hInc hDec], ...
         {sprintf('Increased (%d, %.0f%%)', nInc, 100*nInc/nCh), ...
          sprintf('Decreased (%d, %.0f%%)', nDec, 100*nDec/nCh)}, ...
-        'Location', 'northwest', 'FontSize', 12, 'Box', 'off');
+        'Location', 'northwest', 'Box', 'off');
 
-    xlabel(sprintf('Baseline %s (%s)', mc.label, mc.unit), ...
-        'FontSize', 18, 'FontName', 'Arial', 'FontWeight', 'bold');
-    ylabel(sprintf('%s %s (%s)', labels.treatment, mc.label, mc.unit), ...
-        'FontSize', 18, 'FontName', 'Arial', 'FontWeight', 'bold');
-
-    set(gca, 'FontSize', 16, 'FontName', 'Arial', 'LineWidth', 1.5, ...
-        'TickDir', 'out', 'Box', 'off');
+    xlabel(sprintf('Baseline %s (%s)', mc.label, mc.unit));
+    ylabel(sprintf('%s %s (%s)', labels.treatment, mc.label, mc.unit));
 
     % Identity line (y = x) — drawn LAST so it sits on top of all scatter objects
     limRange = xlim;
@@ -120,11 +113,13 @@ function fig_rate_scatter(metric, study, varargin)
     uistack(hLine, 'top');
     set(hLine, 'HandleVisibility', 'off');
 
+    % --- Nature/NPP styling -----------------------------------------------
+    apply_nature_style(fig);
+
     % --- Save ---
     outBase = fullfile(cfg.paths.figures_out, ...
         sprintf('%s_%s_rate_scatter', study, metric));
     save_figure(fig, [outBase '.png']);
-    exportgraphics(fig, [outBase '.pdf'], 'ContentType', 'vector');
     close(fig);
 
     fprintf('fig_rate_scatter(%s, %s): n=%d, increased=%d (%.1f%%), decreased=%d (%.1f%%)\n', ...

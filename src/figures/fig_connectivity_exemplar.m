@@ -78,7 +78,7 @@ function fig_connectivity_exemplar(study, varargin)
 
     % --- Figure layout --------------------------------------------------
     colors = paired_plot_colors(study);
-    fig = figure('Visible', 'off', 'Color', 'w', 'Position', [100 100 1500 1100]);
+    fig = create_panel_figure(18.0, 12.0);
 
     tl = tiledlayout(fig, 3, 3, 'Padding', 'compact', 'TileSpacing', 'compact');
 
@@ -138,6 +138,9 @@ function fig_connectivity_exemplar(study, varargin)
         'edgeThresholdPct', opt.edgeThresholdPct, ...
         'nodeCmap',         'turbo', ...
         'title',            '\Delta network (red = gained, blue = lost)');
+
+    % --- Nature/NPP styling -----------------------------------------------
+    apply_nature_style(fig);
 
     % --- Save -----------------------------------------------------------
     if ~exist(cfg.paths.figures_out, 'dir')

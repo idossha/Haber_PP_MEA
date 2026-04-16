@@ -40,6 +40,10 @@ function run_figures(varargin)
     for s = 1:numel(studies)
         study = studies{s};
         calls = {
+            'fig_rate_panel_traces',          {study};
+            'fig_rate_panel_raster',          {study};
+            'fig_rate_scatter',               {'spike', study};
+            'fig_rate_scatter',               {'burst', study};
             'fig_spike_rate',                 {study};
             'fig_burst_rate',                 {study};
             'fig_spike_pct_change_violin',    {study};

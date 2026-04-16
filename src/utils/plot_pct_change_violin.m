@@ -37,6 +37,10 @@ function plot_pct_change_violin(pctData, colors, xLabelText, yAxisLabel, pctYlim
     iqrPct   = q3 - q1;
     upper    = q3 + 1.5 * iqrPct;
 
+    % Upper whisker cap: highest data point within Tukey fence
+    whiskerTop = max(pctData(pctData <= upper));
+    if isempty(whiskerTop); whiskerTop = q3; end
+
     if isempty(pctYlim)
         yRound = ceil(upper / 100) * 100;
         maxPct = max(pctData);
@@ -54,6 +58,12 @@ function plot_pct_change_violin(pctData, colors, xLabelText, yAxisLabel, pctYlim
         yLimUse(2) = ceil(yLimUse(2) / 100) * 100;
     end
 
+    % Guarantee whisker cap is visible with 8% headroom
+    whiskerHeadroom = max(20, 0.08 * (whiskerTop + 100));
+    if whiskerTop + whiskerHeadroom > yLimUse(2)
+        yLimUse(2) = ceil((whiskerTop + whiskerHeadroom) / 50) * 50;
+    end
+
     medPct  = median(pctData, 'omitnan');
     inRange = pctData >= (q1 - 1.5 * iqrPct) & pctData <= (q3 + 1.5 * iqrPct);
     if any(inRange)
@@ -65,9 +75,7 @@ function plot_pct_change_violin(pctData, colors, xLabelText, yAxisLabel, pctYlim
     fprintf('  median %.2f%% | IQR [%.2f, %.2f]%% | mean(inlier) %.2f%% | n=%d\n', ...
         medPct, q1, q3, meanPctInlier, numel(pctData));
 
-    fig = figure('Visible', 'off', 'Position', [100 100 380 620], 'Color', 'w');
-    set(fig, 'Units', 'inches', 'PaperUnits', 'inches', ...
-        'PaperSize', [3.8 6.2], 'PaperPosition', [0 0 3.8 6.2]);
+    fig = create_panel_figure(5.8, 4.4);
     hold on;
     ylim(yLimUse);
 
@@ -137,24 +145,14 @@ function plot_pct_change_violin(pctData, colors, xLabelText, yAxisLabel, pctYlim
         uistack(hMeanLn, 'top');
     end
 
-    xlim([0.62, 1.38]);
+    xlim([0.40, 1.60]);
     xticks(xCenter); xticklabels({xLabelText});
-    ylabel(yAxisLabel, 'FontSize', 18, 'FontName', 'Arial', 'FontWeight', 'bold');
-    set(gca, 'FontSize', 18, 'FontName', 'Arial', 'TickDir', 'out', ...
-        'FontWeight', 'bold', 'YGrid', 'off', 'XGrid', 'off');
-    ax = gca;
-    ax.XAxis.FontSize = 18;
-    ax.YAxis.FontSize = 18;
-    ax.YAxis.FontWeight = 'bold';
-    ax.LineWidth = 1.7;
-    ax.Position = [0.20, 0.10, 0.72, 0.74];
-    ax.XAxis.TickLength = [0.014 0.014];
-    ax.YAxis.TickLength = [0.014 0.014];
+    ylabel(yAxisLabel);
     box off;
 
     % Re-draw bottom axis line on top.
-    hXAxis = plot([0.62, 1.38], [yLimUse(1), yLimUse(1)], '-', ...
-        'Color', [0 0 0], 'LineWidth', 1.7);
+    hXAxis = plot([0.40, 1.60], [yLimUse(1), yLimUse(1)], '-', ...
+        'Color', [0 0 0], 'LineWidth', 0.6);
     uistack(hXAxis, 'top');
 
     yTickStep = nice_tick_step(yLimUse(2) - yLimUse(1), 9);
@@ -165,6 +163,9 @@ function plot_pct_change_violin(pctData, colors, xLabelText, yAxisLabel, pctYlim
     ytVals = unique([ytVals(:); 0]);
     ytVals = sort(ytVals);
     yticks(ytVals);
+
+    % --- Nature/NPP styling -----------------------------------------------
+    apply_nature_style(fig);
 
     save_figure(fig, outFile);
     close(fig);

@@ -47,7 +47,7 @@ cfg.paths.root        = root;
 cfg.paths.data_doi    = fullfile(root, 'data', 'DOI');
 cfg.paths.data_ket    = fullfile(root, 'data', 'ketanserin');
 cfg.paths.cache       = fullfile(root, 'cache');
-cfg.paths.figures_out = fullfile(root, 'figures_out');
+cfg.paths.figures_out = fullfile(root, 'figures', 'panels');
 cfg.paths.tdt_sdk     = fullfile(root, 'TDTMatlabSDK');
 
 % =========================================================================

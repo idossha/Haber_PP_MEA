@@ -84,9 +84,7 @@ function plot_paired_lines(yBaseline, yTreatment, colors, statsString, outFile, 
         end
     end
 
-    fig = figure('Visible', 'off', 'Position', [100, 100, 720, 720], 'Color', 'w');
-    set(fig, 'Units', 'inches', 'PaperUnits', 'inches', ...
-        'PaperSize', [7.2 7.2], 'PaperPosition', [0 0 7.2 7.2]);
+    fig = create_panel_figure(18.3, 18.3);
     hold on;
 
     % Half-violin densities behind dots.
@@ -185,20 +183,11 @@ function plot_paired_lines(yBaseline, yTreatment, colors, statsString, outFile, 
     end
 
     if ~isempty(opt.yLabel)
-        ylabel(opt.yLabel, 'FontSize', 18, 'FontName', 'Arial', 'FontWeight', 'bold');
+        ylabel(opt.yLabel);
     end
     if ~isempty(opt.title)
-        title(opt.title, 'FontSize', 16, 'FontName', 'Arial', 'FontWeight', 'bold');
+        title(opt.title);
     end
-
-    set(gca, 'FontSize', 18, 'FontName', 'Arial', 'TickDir', 'out', 'FontWeight', 'bold');
-    ax = gca;
-    ax.XAxis.FontSize = 18;
-    ax.YAxis.FontSize = 18;
-    ax.YAxis.FontWeight = 'bold';
-    ax.LineWidth = 1.7;
-    ax.Position = [0.18, 0.14, 0.78, 0.74];
-    ax.XAxis.TickLength = [0.014 0.014];
     box off;
 
     % Legend for paired-line colour coding (shown if both classes present).
@@ -214,7 +203,7 @@ function plot_paired_lines(yBaseline, yTreatment, colors, statsString, outFile, 
     end
     if ~isempty(legendHandles)
         legend(legendHandles, legendLabels, 'Location', 'northwest', ...
-            'Box', 'off', 'FontSize', 12);
+            'Box', 'off');
     end
 
     if ~isempty(statsString)
@@ -224,11 +213,11 @@ function plot_paired_lines(yBaseline, yTreatment, colors, statsString, outFile, 
             'Units',               'normalized', ...
             'HorizontalAlignment', 'right', ...
             'VerticalAlignment',   'top', ...
-            'FontSize', 11, 'FontName', 'Arial', ...
             'BackgroundColor', [1 1 1], ...
             'EdgeColor', 'none', 'Margin', 4);
     end
 
+    apply_nature_style(fig);
     save_figure(fig, outFile);
     close(fig);
 end

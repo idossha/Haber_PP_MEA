@@ -56,7 +56,7 @@ function fig_rate_panel_raster(study, varargin)
     % --- Load spike times from cache (no re-processing) ----------------
     [bSpikes, tSpikes, bMeta, tMeta] = load_pair_spikes(pair, opt.channels, cfg);
 
-    fig = figure('Visible', 'off', 'Color', 'w', 'Position', [100 100 1600 900]);
+    fig = create_panel_figure(18.0, 4.2);
     tl = tiledlayout(fig, 1, 2, 'Padding', 'compact', 'TileSpacing', 'compact');
     title(tl, sprintf('Raster: %s  vs  %s   (pair %d)', ...
         labels.baseline, labels.treatment, pairIdx), ...
@@ -69,6 +69,9 @@ function fig_rate_panel_raster(study, varargin)
     axT = nexttile(tl, 2);
     plot_raster_column(axT, tSpikes, tMeta.durationSec, ...
         labels.treatment, opt.tickWidth);
+
+    % --- Nature/NPP styling -----------------------------------------------
+    apply_nature_style(fig);
 
     % --- Save -----------------------------------------------------------
     if ~exist(cfg.paths.figures_out, 'dir')

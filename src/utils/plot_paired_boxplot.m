@@ -43,9 +43,7 @@ function plot_paired_boxplot(yBaseline, yTreatment, colors, labels, outFile, var
     y = [yBase; yTreat];
     g = [ones(nCh, 1); 2 * ones(nCh, 1)];
 
-    fig = figure('Visible', 'off', 'Position', [100, 100, 720, 720], 'Color', 'w');
-    set(fig, 'Units', 'inches', 'PaperUnits', 'inches', ...
-        'PaperSize', [7.2 7.2], 'PaperPosition', [0 0 7.2 7.2]);
+    fig = create_panel_figure(18.3, 18.3);
     hold on;
 
     boxplot(y, g, ...
@@ -118,22 +116,14 @@ function plot_paired_boxplot(yBaseline, yTreatment, colors, labels, outFile, var
     end
 
     if ~isempty(opt.yLabel)
-        ylabel(opt.yLabel, 'FontSize', 18, 'FontName', 'Arial', 'FontWeight', 'bold');
+        ylabel(opt.yLabel);
     end
     if ~isempty(opt.title)
-        title(opt.title, 'FontSize', 16, 'FontName', 'Arial', 'FontWeight', 'bold');
+        title(opt.title);
     end
-
-    set(gca, 'FontSize', 18, 'FontName', 'Arial', 'TickDir', 'out', 'FontWeight', 'bold');
-    ax = gca;
-    ax.XAxis.FontSize = 18;
-    ax.YAxis.FontSize = 18;
-    ax.YAxis.FontWeight = 'bold';
-    ax.LineWidth = 1.7;
-    ax.Position = [0.18, 0.14, 0.78, 0.76];
-    ax.XAxis.TickLength = [0.014 0.014];
     box off;
 
+    apply_nature_style(fig);
     save_figure(fig, outFile);
     close(fig);
 end

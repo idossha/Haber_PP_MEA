@@ -194,9 +194,7 @@ function plot_change_category_box(pctSil, pctDec, pctInc, nUnchanged, outFile, v
     colorDecrease = [0.82, 0.58, 0.58];
     colorIncrease = [0.50, 0.72, 0.55];
 
-    fig = figure('Visible', 'off', 'Position', [100 100 720 720], 'Color', 'w');
-    set(fig, 'Units', 'inches', 'PaperUnits', 'inches', ...
-        'PaperSize', [7.2 7.2], 'PaperPosition', [0 0 7.2 7.2]);
+    fig = create_panel_figure(5.8, 4.4);
     hold on;
 
     n = numel(pctSil);
@@ -244,18 +242,9 @@ function plot_change_category_box(pctSil, pctDec, pctInc, nUnchanged, outFile, v
             '--', 'Color', [0.3 0.3 0.3], 'LineWidth', 1.2);
     end
 
-    set(gca, 'FontSize', 18, 'FontName', 'Arial', 'TickDir', 'out', 'FontWeight', 'bold');
-    ax = gca;
-    ax.XAxis.FontSize = 16;
-    ax.YAxis.FontSize = 18;
-    ax.YAxis.FontWeight = 'bold';
-    ax.LineWidth = 1.7;
-    ax.Position = [0.16, 0.14, 0.80, 0.74];
-    ax.XAxis.TickLength = [0.014 0.014];
-    ax.YAxis.TickLength = [0.014 0.014];
     box off;
 
-    ylabel(opt.yLabel, 'FontSize', 18, 'FontName', 'Arial', 'FontWeight', 'bold');
+    ylabel(opt.yLabel);
     if ~isempty(opt.title)
         title(opt.title, 'FontSize', 15, 'FontName', 'Arial', 'FontWeight', 'bold');
     end
@@ -281,6 +270,9 @@ function plot_change_category_box(pctSil, pctDec, pctInc, nUnchanged, outFile, v
             'FontSize', 11, 'FontName', 'Arial', 'EdgeColor', 'none', ...
             'HorizontalAlignment', 'center', 'VerticalAlignment', 'bottom');
     end
+
+    % --- Nature/NPP styling -----------------------------------------------
+    apply_nature_style(fig);
 
     save_figure(fig, outFile);
     close(fig);
