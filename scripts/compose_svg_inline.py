@@ -6,9 +6,9 @@ NOT as base64 <image> data URIs. Every path, text element, and shape from
 each panel remains individually selectable and editable in Inkscape.
 
 Pipeline steps (all run by this script):
-  1. Convert panel PDFs → SVGs via Inkscape  (figures/panels/ → figures/_panel_svgs/)
-  2. Inline panel SVGs into composite SVGs    (→ figures/composite_svgs/)
-  3. Export composites → PDF + PNG via Inkscape (→ figures/composite_pdfs/, composite_pngs/)
+  1. Convert panel PDFs → SVGs via Inkscape  (output/fig{N}/panels/ → output/_intermediate/panel_svgs/)
+  2. Inline panel SVGs into composite SVGs    (→ output/fig{N}/composite/)
+  3. Export composites → PDF + PNG via Inkscape (→ output/fig{N}/composite/)
 
 Usage:
     python3 scripts/compose_svg_inline.py                  # all figures
@@ -17,18 +17,29 @@ Usage:
     python3 scripts/compose_svg_inline.py --skip-export     # skip SVG→PDF/PNG step
 """
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
 from xml.etree import ElementTree as ET
+from PIL import Image
+
+Image.MAX_IMAGE_PIXELS = None  # 600-DPI panels are large but legitimate
 
 ROOT = Path(__file__).resolve().parents[1]
-PANELS_PDF = ROOT / "figures" / "panels"
-PANELS_SVG = ROOT / "figures" / "_panel_svgs"
-PANELS_PNG = ROOT / "figures" / "_panel_pngs"
-OUT_SVG = ROOT / "figures" / "composite_svgs"
-OUT_PDF = ROOT / "figures" / "composite_pdfs"
-OUT_PNG = ROOT / "figures" / "composite_pngs"
+OUTPUT = ROOT / "output"
+INTERMEDIATE = OUTPUT / "_intermediate"
+PANEL_SVGS = INTERMEDIATE / "panel_svgs"
+PANEL_PNGS = INTERMEDIATE / "panel_pngs"
+
+# Figure mapping: figure number -> output subdirectory
+_FIG_DIR = {2: "fig2", 3: "fig3", 4: "fig4", 5: "fig5"}
+
+def _panels_dir(fig_num: int) -> Path:
+    return OUTPUT / _FIG_DIR[fig_num] / "panels"
+
+def _composite_dir(fig_num: int) -> Path:
+    return OUTPUT / _FIG_DIR[fig_num] / "composite"
 
 INKSCAPE = "/Applications/Inkscape.app/Contents/MacOS/inkscape"
 
@@ -85,8 +96,8 @@ def conn_panels(prefix):
 
 FIGURES = {
     2: {"type": "rate", "prefix": "doi", "title": "Figure 2 — DOI firing and burst rates"},
-    3: {"type": "rate", "prefix": "ket", "title": "Figure 3 — Ketanserin firing and burst rates"},
-    4: {"type": "conn", "prefix": "doi", "title": "Figure 4 — DOI functional connectivity"},
+    3: {"type": "conn", "prefix": "doi", "title": "Figure 3 — DOI functional connectivity"},
+    4: {"type": "rate", "prefix": "ket", "title": "Figure 4 — Ketanserin firing and burst rates"},
     5: {"type": "conn", "prefix": "ket", "title": "Figure 5 — Ketanserin functional connectivity"},
 }
 
@@ -95,24 +106,28 @@ FIGURES = {
 
 def convert_pdfs_to_svgs(fig_nums):
     """Convert panel PDFs to SVGs using Inkscape."""
-    # Collect all needed panel basenames
-    needed = set()
+    import shutil
+
+    # Collect all needed (fig_num, basename) pairs
+    needed = []
     for n in fig_nums:
         info = FIGURES[n]
         panels = rate_panels(info["prefix"]) if info["type"] == "rate" else conn_panels(info["prefix"])
-        needed.update(panels.values())
+        for basename in panels.values():
+            needed.append((n, basename))
 
-    PANELS_SVG.mkdir(parents=True, exist_ok=True)
-    PANELS_PNG.mkdir(parents=True, exist_ok=True)
+    PANEL_SVGS.mkdir(parents=True, exist_ok=True)
+    PANEL_PNGS.mkdir(parents=True, exist_ok=True)
 
     converted = 0
-    for basename in sorted(needed):
-        pdf = PANELS_PDF / f"{basename}.pdf"
-        svg = PANELS_SVG / f"{basename}.svg"
-        png = PANELS_PNG / f"{basename}.png"
+    for fig_num, basename in sorted(set(needed)):
+        panels_dir = _panels_dir(fig_num)
+        pdf = panels_dir / f"{basename}.pdf"
+        svg = PANEL_SVGS / f"{basename}.svg"
+        png = PANEL_PNGS / f"{basename}.png"
 
         if not pdf.exists():
-            print(f"  WARNING: {pdf.name} not found — skipping")
+            print(f"  WARNING: {pdf.name} not found in {panels_dir} — skipping")
             continue
 
         # Convert PDF → SVG
@@ -128,9 +143,8 @@ def convert_pdfs_to_svgs(fig_nums):
             print(f"  {svg.name} up to date")
 
         # Also copy PNG if it exists in panels/
-        src_png = PANELS_PDF / f"{basename}.png"
+        src_png = panels_dir / f"{basename}.png"
         if src_png.exists() and (not png.exists() or src_png.stat().st_mtime > png.stat().st_mtime):
-            import shutil
             shutil.copy2(src_png, png)
 
     print(f"  PDF→SVG: {converted} converted")
@@ -138,8 +152,106 @@ def convert_pdfs_to_svgs(fig_nums):
 
 # ── SVG parsing and composition helpers ──────────────────────────────────
 
-def parse_panel(svg_path: Path):
-    """Parse a panel SVG, return (viewBox_w, viewBox_h, children, defs)."""
+# Panels that should be embedded as raster PNGs (too heavy as vector)
+RASTER_PANELS = {"traces", "raster"}
+
+
+def get_png_dimensions(png_path: Path):
+    """Get pixel dimensions of a PNG without loading full image."""
+    with Image.open(png_path) as img:
+        return img.width, img.height
+
+
+def make_raster_panel(png_path: Path, panel_id: str, x: float, y: float,
+                      target_w: float, target_h: float = None,
+                      composite_dir: Path = None):
+    """Link a PNG as an external <image> inside an Inkscape layer group.
+
+    Uses a relative path so the SVG stays portable within the repo.
+    The PNG must remain at its path relative to the composite SVG.
+    """
+    px_w, px_h = get_png_dimensions(png_path)
+
+    sx = target_w / px_w
+    if target_h is not None:
+        sy = target_h / px_h
+        s = min(sx, sy)
+    else:
+        s = sx
+    actual_h = px_h * s
+
+    # Relative path from the composite directory to the PNG
+    ref_dir = composite_dir if composite_dir else png_path.parent
+    rel = os.path.relpath(png_path, ref_dir)
+
+    g = ET.Element("g", attrib={
+        "id": panel_id,
+        "{http://www.inkscape.org/namespaces/inkscape}label": panel_id,
+        "{http://www.inkscape.org/namespaces/inkscape}groupmode": "layer",
+    })
+    ET.SubElement(g, "image", attrib={
+        "x": f"{x:.2f}",
+        "y": f"{y:.2f}",
+        "width": f"{target_w:.2f}",
+        "height": f"{actual_h:.2f}",
+        "href": rel,
+        "preserveAspectRatio": "xMidYMid meet",
+    })
+
+    return g, [], actual_h
+
+
+def _prefix_ids(elem, prefix):
+    """Recursively prefix all 'id' attributes and update references (url(#...), href=#...)."""
+    import re
+    url_re = re.compile(r'url\(#([^)]+)\)')
+    href_re = re.compile(r'^#(.+)$')
+
+    # Collect all original IDs first
+    old_ids = set()
+    for e in elem.iter():
+        eid = e.get("id")
+        if eid:
+            old_ids.add(eid)
+
+    if not old_ids:
+        return
+
+    # Build mapping
+    id_map = {oid: f"{prefix}_{oid}" for oid in old_ids}
+
+    # Apply
+    for e in elem.iter():
+        # Rename id
+        eid = e.get("id")
+        if eid and eid in id_map:
+            e.set("id", id_map[eid])
+
+        # Update all attributes that may reference IDs
+        for attr, val in list(e.attrib.items()):
+            # url(#id) references (clip-path, fill, stroke, filter, mask, marker)
+            new_val = url_re.sub(lambda m: f"url(#{id_map.get(m.group(1), m.group(1))})", val)
+            # href="#id" references (xlink:href, href)
+            href_m = href_re.match(new_val)
+            if href_m and href_m.group(1) in id_map:
+                new_val = f"#{id_map[href_m.group(1)]}"
+            if new_val != val:
+                e.set(attr, new_val)
+
+        # Also check style attribute for url(#...) refs
+        style = e.get("style")
+        if style:
+            new_style = url_re.sub(lambda m: f"url(#{id_map.get(m.group(1), m.group(1))})", style)
+            if new_style != style:
+                e.set("style", new_style)
+
+
+def parse_panel(svg_path: Path, id_prefix: str = ""):
+    """Parse a panel SVG, return (viewBox_w, viewBox_h, children, defs).
+
+    If id_prefix is given, all IDs and their references are prefixed to
+    avoid collisions when multiple panels are inlined in one document.
+    """
     tree = ET.parse(svg_path)
     root = tree.getroot()
 
@@ -150,6 +262,10 @@ def parse_panel(svg_path: Path):
     else:
         vb_w = float(root.get("width", "100"))
         vb_h = float(root.get("height", "100"))
+
+    # Prefix all IDs in the entire tree before splitting
+    if id_prefix:
+        _prefix_ids(root, id_prefix)
 
     children = []
     defs = []
@@ -168,7 +284,7 @@ def parse_panel(svg_path: Path):
 def make_panel_group(svg_path: Path, panel_id: str, x: float, y: float,
                      target_w: float, target_h: float = None):
     """Create a <g> element containing the panel content, scaled/translated to fit."""
-    vb_w, vb_h, children, defs = parse_panel(svg_path)
+    vb_w, vb_h, children, defs = parse_panel(svg_path, id_prefix=panel_id)
 
     sx = target_w / vb_w
     if target_h is not None:
@@ -207,26 +323,17 @@ def make_label(text: str, x: float, y: float):
 
 def assemble_svg(groups, labels, all_defs, title_text, page_h):
     """Build the root <svg> element from composed parts."""
-    svg_attrs = {
-        "xmlns": NS["svg"],
-        "xmlns:xlink": NS["xlink"],
-        "xmlns:inkscape": NS["inkscape"],
-        "xmlns:sodipodi": NS["sodipodi"],
+    # Namespace prefixes are handled by ET.register_namespace() calls above.
+    # Only set non-namespace attributes here to avoid duplicate xmlns decls.
+    root = ET.Element(f"{{{NS['svg']}}}svg", attrib={
         "width": f"{PAGE_W}mm",
         "height": f"{page_h:.1f}mm",
         "viewBox": f"0 0 {PAGE_W} {page_h:.1f}",
         "version": "1.1",
-    }
-    root = ET.Element("svg", attrib=svg_attrs)
+    })
 
     title = ET.SubElement(root, "title")
     title.text = title_text
-
-    ET.SubElement(root, "rect", attrib={
-        "x": "0", "y": "0",
-        "width": str(PAGE_W), "height": f"{page_h:.1f}",
-        "fill": "white",
-    })
 
     # Merge defs
     if all_defs:
@@ -267,12 +374,42 @@ def write_svg(root, out_path):
 
 # ── Step 2: Compose rate figures (Figs 2, 3) ────────────────────────────
 
+def embed_panel(panel_key, basename, panel_id, x, y, target_w,
+                target_h=None, panels_dir=None, composite_dir=None):
+    """Route to raster or vector embedding based on panel type."""
+    if panel_key in RASTER_PANELS:
+        png = PANEL_PNGS / f"{basename}.png"
+        if not png.exists() and panels_dir is not None:
+            png = panels_dir / f"{basename}.png"
+        if not png.exists():
+            print(f"    WARNING: {basename}.png not found for raster embed")
+            return None, [], 0
+        print(f"    {panel_id}: raster (PNG)")
+        return make_raster_panel(png, panel_id, x, y, target_w, target_h,
+                                 composite_dir=composite_dir)
+    else:
+        svg = PANEL_SVGS / f"{basename}.svg"
+        if not svg.exists():
+            print(f"    WARNING: {basename}.svg not found for vector embed")
+            return None, [], 0
+        return make_panel_group(svg, panel_id, x, y, target_w, target_h)
+
+
 def compose_rate(fig_num, prefix, title_text):
     """Compose a rate figure: left col A/B, right col C/D/E over F/G/H."""
     panels = rate_panels(prefix)
-    svg_files = {k: PANELS_SVG / f"{v}.svg" for k, v in panels.items()}
+    panels_dir = _panels_dir(fig_num)
 
-    missing = [k for k, v in svg_files.items() if not v.exists()]
+    # Check availability: raster panels need PNGs, others need SVGs
+    missing = []
+    for key, basename in panels.items():
+        if key in RASTER_PANELS:
+            if not (PANEL_PNGS / f"{basename}.png").exists() and \
+               not (panels_dir / f"{basename}.png").exists():
+                missing.append(key)
+        else:
+            if not (PANEL_SVGS / f"{basename}.svg").exists():
+                missing.append(key)
     if missing:
         print(f"  SKIP Figure {fig_num}: missing panels {missing}")
         return None
@@ -287,20 +424,24 @@ def compose_rate(fig_num, prefix, title_text):
 
     groups, labels, all_defs = [], [], []
 
-    # Left column: A (traces) over B (raster)
+    composite_dir = _composite_dir(fig_num)
+
+    # Left column: A (traces, raster PNG) over B (raster, raster PNG)
     y = TOP_MARGIN
-    gA, dA, hA = make_panel_group(svg_files["traces"], "panel_a_traces", 0, y, left_w)
+    gA, dA, hA = embed_panel("traces", panels["traces"], "panel_a_traces", 0, y, left_w,
+                             panels_dir=panels_dir, composite_dir=composite_dir)
     groups.append(gA); all_defs.extend(dA)
     labels.append(make_label("a", lbl_ox, y + lbl_oy + LABEL_SIZE_MM))
 
     y_B = y + hA + GAP_MM
-    gB, dB, hB = make_panel_group(svg_files["raster"], "panel_b_raster", 0, y_B, left_w)
+    gB, dB, hB = embed_panel("raster", panels["raster"], "panel_b_raster", 0, y_B, left_w,
+                             panels_dir=panels_dir, composite_dir=composite_dir)
     groups.append(gB); all_defs.extend(dB)
     labels.append(make_label("b", lbl_ox, y_B + lbl_oy + LABEL_SIZE_MM))
 
     left_h = y + hA + GAP_MM + hB
 
-    # Right column: 2 rows × 3 panels, matched to left height
+    # Right column: 2 rows × 3 panels (vector SVG), matched to left height
     row_h = (left_h - TOP_MARGIN - GAP_MM) / 2
 
     for i, (key, pid, lbl) in enumerate([
@@ -309,7 +450,7 @@ def compose_rate(fig_num, prefix, title_text):
         ("violin_spike",  "panel_e_violin_spike",  "e"),
     ]):
         px = right_x + i * (rpanel_w + PANEL_GAP)
-        g, d, h = make_panel_group(svg_files[key], pid, px, TOP_MARGIN, rpanel_w, row_h)
+        g, d, h = embed_panel(key, panels[key], pid, px, TOP_MARGIN, rpanel_w, row_h)
         groups.append(g); all_defs.extend(d)
         labels.append(make_label(lbl, px + lbl_ox, TOP_MARGIN + lbl_oy + LABEL_SIZE_MM))
 
@@ -320,7 +461,7 @@ def compose_rate(fig_num, prefix, title_text):
         ("violin_burst",  "panel_h_violin_burst",  "h"),
     ]):
         px = right_x + i * (rpanel_w + PANEL_GAP)
-        g, d, h = make_panel_group(svg_files[key], pid, px, y_bot, rpanel_w, row_h)
+        g, d, h = embed_panel(key, panels[key], pid, px, y_bot, rpanel_w, row_h)
         groups.append(g); all_defs.extend(d)
         labels.append(make_label(lbl, px + lbl_ox, y_bot + lbl_oy + LABEL_SIZE_MM))
 
@@ -333,7 +474,7 @@ def compose_rate(fig_num, prefix, title_text):
 def compose_conn(fig_num, prefix, title_text):
     """Compose a connectivity figure: A (exemplar) over B (summary), full width."""
     panels = conn_panels(prefix)
-    svg_files = {k: PANELS_SVG / f"{v}.svg" for k, v in panels.items()}
+    svg_files = {k: PANEL_SVGS / f"{v}.svg" for k, v in panels.items()}
 
     missing = [k for k, v in svg_files.items() if not v.exists()]
     if missing:
@@ -363,17 +504,17 @@ def compose_conn(fig_num, prefix, title_text):
 
 def export_composites(fig_nums):
     """Export composite SVGs to PDF and PNG via Inkscape."""
-    OUT_PDF.mkdir(parents=True, exist_ok=True)
-    OUT_PNG.mkdir(parents=True, exist_ok=True)
-
     for n in fig_nums:
-        svg = OUT_SVG / f"Figure{n}_composite.svg"
+        comp_dir = _composite_dir(n)
+        comp_dir.mkdir(parents=True, exist_ok=True)
+
+        svg = comp_dir / f"Figure{n}_composite.svg"
         if not svg.exists():
             print(f"  SKIP export Figure {n}: composite SVG not found")
             continue
 
-        pdf = OUT_PDF / f"Figure{n}_composite.pdf"
-        png = OUT_PNG / f"Figure{n}_composite.png"
+        pdf = comp_dir / f"Figure{n}_composite.pdf"
+        png = comp_dir / f"Figure{n}_composite.png"
 
         print(f"  Exporting Figure {n} → PDF")
         subprocess.run([
@@ -412,9 +553,11 @@ def main():
 
     # Step 2: Compose
     print("\n── Step 2: Compose inline SVG composites ──")
-    OUT_SVG.mkdir(parents=True, exist_ok=True)
     for n in fig_nums:
         info = FIGURES[n]
+        comp_dir = _composite_dir(n)
+        comp_dir.mkdir(parents=True, exist_ok=True)
+
         print(f"  Composing Figure {n} ({info['prefix']}, {info['type']})...")
         if info["type"] == "rate":
             svg_root = compose_rate(n, info["prefix"], info["title"])
@@ -422,7 +565,7 @@ def main():
             svg_root = compose_conn(n, info["prefix"], info["title"])
 
         if svg_root is not None:
-            out_path = OUT_SVG / f"Figure{n}_composite.svg"
+            out_path = comp_dir / f"Figure{n}_composite.svg"
             write_svg(svg_root, out_path)
 
     # Step 3: Export

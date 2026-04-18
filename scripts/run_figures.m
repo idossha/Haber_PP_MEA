@@ -11,13 +11,12 @@ function run_figures(varargin)
 %   figure script will raise :MissingCache and this driver will log the
 %   error but continue with the remaining figures.
 %
-%   Output: PNG files under <repo>/figures_out/ (see
-%   cfg.paths.figures_out in src/config/project_config.m).
+%   Output: PNG/PDF files under <repo>/output/fig{2..5}/panels/ (see
+%   output_path.m and cfg.paths.output in src/config/project_config.m).
 
     p = inputParser;
     addParameter(p, 'study',        'all', @(s) any(strcmpi(s, {'all','doi','ket'})));
     addParameter(p, 'connectivity', true,  @(x) islogical(x) && isscalar(x));
-    addParameter(p, 'newAngles',    true,  @(x) islogical(x) && isscalar(x));
     parse(p, varargin{:});
     opt = p.Results;
 
@@ -31,8 +30,7 @@ function run_figures(varargin)
     t0 = tic;
     fprintf('\n==== run_figures ====\n');
     fprintf('studies     : %s\n', strjoin(studies, ', '));
-    fprintf('connectivity: %d\n', opt.connectivity);
-    fprintf('newAngles   : %d\n\n', opt.newAngles);
+    fprintf('connectivity: %d\n\n', opt.connectivity);
 
     nTotal = 0; nOk = 0; nErr = 0;
     errors = {};
@@ -57,15 +55,6 @@ function run_figures(varargin)
                 'fig_connectivity_summary',   {study};
                 'fig_connectivity_exemplar',  {study}}];
         end
-        if opt.newAngles
-            calls = [calls; { ...
-                'fig_new_angles_A_avalanches_size', {study};
-                'fig_new_angles_B_burstsync',       {study};
-                'fig_new_angles_C_entropy',         {study};
-                'fig_new_angles_D_te',              {study};
-                'fig_new_angles_E_avalanche_class', {study}}];
-        end
-
         for k = 1:size(calls, 1)
             fname = calls{k, 1};
             args  = calls{k, 2};

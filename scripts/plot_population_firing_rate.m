@@ -105,7 +105,8 @@ xlim([0 plotDurationSec/60]);
 ylim([0 inf]);
 
 % Save
-outDir = cfg.paths.figures_out;
+outDir = fullfile(cfg.paths.output, 'shared');
+if ~exist(outDir, 'dir'); mkdir(outDir); end
 exportgraphics(fig, fullfile(outDir, 'population_firing_rate.png'), ...
     'Resolution', 600);
 exportgraphics(fig, fullfile(outDir, 'population_firing_rate.pdf'), ...

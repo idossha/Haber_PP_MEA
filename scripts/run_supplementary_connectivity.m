@@ -16,7 +16,8 @@
 %     figures_out/<study>_sttc_vs_pearson.csv
 
 cfg = project_config();
-outDir = cfg.paths.figures_out;
+outDir = fullfile(cfg.paths.output, 'SI');
+if ~exist(outDir, 'dir'); mkdir(outDir); end
 
 studies = {'doi', 'ket'};
 

@@ -4,6 +4,7 @@ data/
 cache/
 figures/
 logs/
+output/
 
 # === Manuscript & literature (not code) ===
 paper/
@@ -17,15 +18,14 @@ TODO.md
 # === Python
 .ipynb_checkpoints/
 __pycache__/
-
-# === MCP
-.playwright-mcp/
-
 # === Third-party SDK (not ours to distribute) ===
 TDTMatlabSDK/
 
 # === Claude / AI agent config ===
 .claude/
+
+# === MCP
+.playwright-mcp/
 
 # === Legacy archive scripts ===
 src/archive/
