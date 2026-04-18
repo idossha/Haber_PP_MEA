@@ -4,7 +4,7 @@ function fig_spike_rate(study, varargin)
 %   FIG_SPIKE_RATE(study) loads the cached spike rates for the requested
 %   study ('doi' or 'ket'), pools all baseline/treatment pairs, applies the
 %   canonical channel filters (silent-channel exclusion, mean-multiplier
-%   outlier filter), and writes two figures to cfg.paths.figures_out:
+%   outlier filter), and writes two figures to output/fig{2,4}/panels/:
 %       <study>_spike_rate_paired.png    -  paired-line + half-violin
 %       <study>_spike_rate_boxplot.png   -  paired boxplot
 %
@@ -20,7 +20,7 @@ function fig_spike_rate(study, varargin)
 %   study  -  'doi' or 'ket'.
 %
 % OUTPUTS:
-%   PNG files written to cfg.paths.figures_out.
+%   PNG files written to output/fig{2,4}/panels/.
 
     cfg = project_config();
 
@@ -109,13 +109,14 @@ function fig_spike_rate(study, varargin)
     pctIncrease = 100 * sum(ratesTreatment > ratesBaseline) / nCh;
     pctDecrease = 100 * sum(ratesTreatment < ratesBaseline) / nCh;
 
-    if ~exist(cfg.paths.figures_out, 'dir')
-        mkdir(cfg.paths.figures_out);
-    end
+    panelDir = output_path(cfg, study, 'rates', 'panels');
+    statsDir = output_path(cfg, study, 'rates', 'stats');
+    if ~exist(panelDir, 'dir'); mkdir(panelDir); end
+    if ~exist(statsDir, 'dir'); mkdir(statsDir); end
 
     colors      = paired_plot_colors(study);
-    pairedFile  = fullfile(cfg.paths.figures_out, sprintf('%s_spike_rate_paired.png',  study));
-    boxplotFile = fullfile(cfg.paths.figures_out, sprintf('%s_spike_rate_boxplot.png', study));
+    pairedFile  = fullfile(panelDir, sprintf('%s_spike_rate_paired.png',  study));
+    boxplotFile = fullfile(panelDir, sprintf('%s_spike_rate_boxplot.png', study));
 
     yLabelText = 'Firing rate (spikes min^{-1})';
     titleText  = sprintf('Firing rate: %s vs. %s', ...
@@ -160,6 +161,6 @@ function fig_spike_rate(study, varargin)
         'hedges_g_av',      psStats.hedgesGav, ...
         'figures_paired',   pairedFile, ...
         'figures_boxplot',  boxplotFile);
-    export_figure_stats(stats, fullfile(cfg.paths.figures_out, ...
+    export_figure_stats(stats, fullfile(statsDir, ...
         sprintf('%s_spike_rate_stats', study)));
 end

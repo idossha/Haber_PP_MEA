@@ -9,7 +9,7 @@ function paths = export_figure_stats(stats, basePath)
 %
 %   The intent is that every figure script calls this once with the
 %   numbers it computed, so the paper writer has a single location
-%   (figures_out/*.csv or *.json) from which to pull every in-text
+%   (output/fig{N}/stats/*.csv or *.json) from which to pull every in-text
 %   number without opening MATLAB again.
 %
 % INPUTS:

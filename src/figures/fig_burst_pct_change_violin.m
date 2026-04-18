@@ -4,7 +4,7 @@ function fig_burst_pct_change_violin(study, varargin)
 %   FIG_BURST_PCT_CHANGE_VIOLIN(study) loads cached burst rates and spike
 %   rates, applies the proof-of-concept burst-violin filters, computes
 %   100*(t-b)/b per channel (only where baseline burst > 0), and writes
-%   <study>_burst_pct_change_violin.png to cfg.paths.figures_out.
+%   <study>_burst_pct_change_violin.png to output/fig{2,4}/panels/.
 %
 %   FIG_BURST_PCT_CHANGE_VIOLIN(study,                              ...
 %        'pctMaxInclude',         1000,                              ...
@@ -102,12 +102,13 @@ function fig_burst_pct_change_violin(study, varargin)
         error('fig_burst_pct_change_violin:NoData', 'Filters left no observations.');
     end
 
-    if ~exist(cfg.paths.figures_out, 'dir')
-        mkdir(cfg.paths.figures_out);
-    end
+    panelDir = output_path(cfg, study, 'rates', 'panels');
+    statsDir = output_path(cfg, study, 'rates', 'stats');
+    if ~exist(panelDir, 'dir'); mkdir(panelDir); end
+    if ~exist(statsDir, 'dir'); mkdir(statsDir); end
 
     colors  = paired_plot_colors(study);
-    outFile = fullfile(cfg.paths.figures_out, sprintf('%s_burst_pct_change_violin.png', study));
+    outFile = fullfile(panelDir, sprintf('%s_burst_pct_change_violin.png', study));
 
     plot_pct_change_violin(pctAll, colors, labels.treatment, ...
         'Percent change in burst rate (%)', opt.pctYlim, outFile);
@@ -125,6 +126,6 @@ function fig_burst_pct_change_violin(study, varargin)
         'pct_above_zero', 100 * mean(pctAll > 0), ...
         'pct_below_zero', 100 * mean(pctAll < 0), ...
         'figure_file',    outFile);
-    export_figure_stats(stats, fullfile(cfg.paths.figures_out, ...
+    export_figure_stats(stats, fullfile(statsDir, ...
         sprintf('%s_burst_pct_change_violin_stats', study)));
 end

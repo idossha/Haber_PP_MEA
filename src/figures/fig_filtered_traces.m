@@ -11,7 +11,7 @@ function fig_filtered_traces(baselineName, treatmentName, channelIndices, vararg
 %   Each row is a channel, scaled symmetrically around its own per-channel
 %   peak amplitude. Per-channel voltage scale bars sit in the right margin
 %   and time scale bars (10 s zoom, 60 s full) sit below the panels. The
-%   figure is written to cfg.paths.figures_out.
+%   figure is written to output/shared/.
 %
 %   FIG_FILTERED_TRACES(..., 'labels', {'Baseline','DOI'}, ...
 %                            'zoomDuration', 30)
@@ -27,7 +27,7 @@ function fig_filtered_traces(baselineName, treatmentName, channelIndices, vararg
 %   'outFile'       -  override the default output path
 %
 % OUTPUTS:
-%   PNG file written to cfg.paths.figures_out (or 'outFile' if supplied).
+%   PNG file written to output/shared/ (or 'outFile' if supplied).
 
     cfg = project_config();
 
@@ -69,10 +69,11 @@ function fig_filtered_traces(baselineName, treatmentName, channelIndices, vararg
     end
 
     if isempty(opt.outFile)
-        if ~exist(cfg.paths.figures_out, 'dir')
-            mkdir(cfg.paths.figures_out);
+        sharedDir = output_path(cfg, '', 'shared', '');
+        if ~exist(sharedDir, 'dir')
+            mkdir(sharedDir);
         end
-        outFile = fullfile(cfg.paths.figures_out, ...
+        outFile = fullfile(sharedDir, ...
             sprintf('filtered_traces_%s_vs_%s.png', ...
                 strrep(char(opt.baselineName),  '-', '_'), ...
                 strrep(char(opt.treatmentName), '-', '_')));

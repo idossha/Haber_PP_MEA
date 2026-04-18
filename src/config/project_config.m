@@ -17,7 +17,7 @@ function cfg = project_config()
 %
 % OUTPUTS:
 %   cfg  -  Struct with nested fields:
-%             cfg.paths       - root, data, cache, figures_out, tdt_sdk
+%             cfg.paths       - root, data, cache, output, tdt_sdk
 %             cfg.figures     - output format, DPI
 %             cfg.filter      - notch + bandpass parameters
 %             cfg.spike       - TDTthresh parameters
@@ -47,7 +47,7 @@ cfg.paths.root        = root;
 cfg.paths.data_doi    = fullfile(root, 'data', 'DOI');
 cfg.paths.data_ket    = fullfile(root, 'data', 'ketanserin');
 cfg.paths.cache       = fullfile(root, 'cache');
-cfg.paths.figures_out = fullfile(root, 'figures', 'panels');
+cfg.paths.output      = fullfile(root, 'output');
 cfg.paths.tdt_sdk     = fullfile(root, 'TDTMatlabSDK');
 
 % =========================================================================
@@ -193,7 +193,7 @@ cfg.outlier.mean_multiplier  = 15;
 %                      figures.
 cfg.pct.max_include            = 1000;
 cfg.pct.exclude_silenced       = false;
-cfg.pct.pct_ylim               = [-100 300];    % primary (tightened for publication)
+cfg.pct.pct_ylim               = [];             % auto: rounds up from Tukey fence with whisker headroom
 cfg.pct.violin_ylim_supplement = [-100 1000];   % supplementary view
 
 % =========================================================================
@@ -241,55 +241,28 @@ cfg.stats.fdr_q                = 0.05;   % Benjamini-Hochberg FDR target
 cfg.stats.min_n_wilcoxon_exact = 20;     % below this, use exact signrank
 
 % =========================================================================
-% Avalanches (Pasquale 2008 + Massobrio 2015)
-% =========================================================================
-% Neither Pasquale 2008 nor Massobrio 2015 defines a branching ratio sigma
-% formula or a Deviation-from-Criticality Coefficient (DCC) — see
-% Tracks/Active/phase1_decisions.md §1. This block anchors ONLY to values
-% that are explicitly backed by a page citation in those two PDFs. sigma
-% and DCC are deliberately NOT reported; the Sethna scaling residual
-% (Massobrio 2015 p.9 Eq. 1-2) is the closest-supported criticality-
-% consistency scalar and is computed instead.
-cfg.avalanches.bin_selection            = 'mean_iei';                     % Massobrio 2015 p.2, p.8
-cfg.avalanches.bin_sweep_ms             = [0.2 0.4 0.6 0.8 1 2 4 8 16];   % Pasquale 2008 p.1357
-cfg.avalanches.active_threshold_spikes  = 1;                               % Pasquale 2008 p.1357; Massobrio 2015 p.2
-cfg.avalanches.size_definition          = 'unique_electrodes';             % Pasquale 2008 p.1357 (defn 2), p.1361
-cfg.avalanches.drop_boundary_avalanches = true;                            % Pasquale 2008 p.1357 flanking-silent-bins rule
-cfg.avalanches.alpha_size_target        = -1.5;                            % Pasquale 2008 p.1358, p.1361; Massobrio 2015 p.2
-cfg.avalanches.beta_lifetime_target     = -2.0;                            % Pasquale 2008 p.1358, p.1361
-cfg.avalanches.alpha_tolerance          = 0.15;                            % Pasquale 2008 p.1361 empirical SD 0.09-0.13
-cfg.avalanches.tail_mass_frac           = 0.80;                            % Pasquale 2008 Fig. 2/6 tail-upturn rule
-cfg.avalanches.ls_drop_unit_bin         = true;                            % Pasquale 2008 p.1357
-cfg.avalanches.ls_drop_below_pct_of_max = 0.01;                            % Pasquale 2008 p.1357
-cfg.avalanches.mle_enabled              = true;                            % Massobrio 2015 p.14
-cfg.avalanches.mle_alternatives         = {'exponential','truncated_power_law','lognormal'}; % Massobrio 2015 p.14
-cfg.avalanches.ks_pvalue_threshold      = 0.10;                            % Massobrio 2015 p.5
-cfg.avalanches.compute_sethna_residual  = true;                            % Massobrio 2015 p.9 Eq. 1-2
-
-% =========================================================================
-% Transfer entropy (Ito 2011)
-% =========================================================================
-cfg.te.bin_ms         = 1;      % Ito 2011 p.4 (canonical D1TE 1 ms bin)
-cfg.te.delay_bins     = 1;      % Ito 2011 p.4 (D1TE = delay-1)
-cfg.te.min_rate_hz    = 5;      % Ito 2011 active-channel eligibility
-cfg.te.top_edges_frac = 0.10;   % top-decile summary; tmp/NEW_ANGLES_REPORT.md §1
-
-% =========================================================================
-% Shannon entropy (Varley 2024)
-% =========================================================================
-cfg.entropy.bin_ms      = 50;   % Varley 2024 §2.2 convention
-cfg.entropy.clip_counts = 3;    % Varley 2024 §2.2 convention (alphabet {0..3}, H_max = 2 bits)
-
-% =========================================================================
-% Burst-onset coincidence (Brofiga 2023 + Chiappalone 2006)
-% =========================================================================
-cfg.burst_sync.window_ms       = 50;                % Chiappalone 2006 (burst propagation <100 ms)
-cfg.burst_sync.window_sweep_ms = [25 50 100 200];   % SI §S4 sweep
-
-% =========================================================================
 % Channels
 % =========================================================================
-cfg.channels.default = 1:64;
+% MCS 60MEA100/10iR: 8x8 grid, 4 corners absent (11,18,81,88) = 60
+% electrode positions.  On the iR model, position 15 is the internal
+% reference electrode, leaving 59 recording electrodes.
+%
+% TDT PZ5 digitizer uses 4 banks of 16 channels (64 total).  The 16th
+% channel of each bank is connected to ground:
+%   PZ5 ch 16, 32, 48, 64 -> GROUND (verified: RMS ~2.4 uV)
+% The 60 signal channels occupy the remaining positions:
+%   Bank A: PZ5 ch  1-15  -> MCS 1-dim pins  1-15
+%   Bank B: PZ5 ch 17-31  -> MCS 1-dim pins 16-30
+%   Bank C: PZ5 ch 33-47  -> MCS 1-dim pins 31-45
+%   Bank D: PZ5 ch 49-63  -> MCS 1-dim pins 46-60
+%
+% Data is stored with physical PZ5 numbering (no Synapse Mapper
+% compression), confirmed empirically by RMS survey of all 64 channels.
+%
+% See docs/60StandardMEA_Layout.pdf for the MCS pinout.
+cfg.channels.default   = [1:15, 17:31, 33:47, 49:63];  % 60 signal channels (physical PZ5 numbering)
+cfg.channels.ground    = [16, 32, 48, 64];              % PZ5 ground channels
+cfg.channels.reference = 15;                            % iR reference electrode (MCS pin 15)
 
 % =========================================================================
 % Dataset lists

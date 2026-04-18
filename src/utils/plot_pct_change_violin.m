@@ -42,26 +42,18 @@ function plot_pct_change_violin(pctData, colors, xLabelText, yAxisLabel, pctYlim
     if isempty(whiskerTop); whiskerTop = q3; end
 
     if isempty(pctYlim)
-        yRound = ceil(upper / 100) * 100;
-        maxPct = max(pctData);
-        if maxPct > yRound
-            yLimTop = ceil(maxPct / 100) * 100;
-        else
-            yLimTop = yRound;
-        end
-        labelHeadroom = max(15, 0.03 * (yLimTop + 100));
-        yLimHi = ceil((yLimTop + labelHeadroom) / 100) * 100;
+        % Set y-axis to show the whisker cap with headroom.
+        % Do NOT expand to the data maximum — extreme ceiling values
+        % (+1000%) would create massive empty space.  The violin KDE
+        % tail can extend beyond the axis limit; that's fine visually.
+        whiskerHeadroom = max(30, 0.15 * (whiskerTop + 100));
+        yLimTop = whiskerTop + whiskerHeadroom;
+        yLimHi  = ceil(yLimTop / 50) * 50;   % round up to nearest 50
         yLimUse = [-100, yLimHi];
     else
         yLimUse    = pctYlim(:)';
         yLimUse(1) = -100;
         yLimUse(2) = ceil(yLimUse(2) / 100) * 100;
-    end
-
-    % Guarantee whisker cap is visible with 8% headroom
-    whiskerHeadroom = max(20, 0.08 * (whiskerTop + 100));
-    if whiskerTop + whiskerHeadroom > yLimUse(2)
-        yLimUse(2) = ceil((whiskerTop + whiskerHeadroom) / 50) * 50;
     end
 
     medPct  = median(pctData, 'omitnan');

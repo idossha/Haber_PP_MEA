@@ -12,6 +12,11 @@ function [pdfPath, pngPath] = save_figure(fig, outPath, varargin)
 %   overrides defaults. outPath may be passed with or without an
 %   extension; both .pdf and .png companions are written next to it.
 %
+%   Include 'svg' in the format list to also export an SVG via MATLAB's
+%   built-in Batik renderer. Colorbars will be rasterised; run
+%   scripts/fix_svg_colorbar.py on the output to replace them with
+%   native SVG <linearGradient> elements.
+%
 % INPUTS:
 %   fig      -  Figure handle.
 %   outPath  -  Output path. Extension is optional; the function strips
@@ -22,6 +27,8 @@ function [pdfPath, pngPath] = save_figure(fig, outPath, varargin)
 %                rasterised elements inside the PDF (default 600).
 %   'format'  -  Cell array of formats to write. Default {'pdf','png'}.
 %                Pass {'pdf'} for PDF only, {'png'} for PNG only.
+%                Include 'svg' for SVG output (post-process with
+%                fix_svg_colorbar.py to get native gradient colorbars).
 %
 % OUTPUTS:
 %   pdfPath  -  Absolute path to the written PDF (empty if not written).
@@ -74,5 +81,11 @@ function [pdfPath, pngPath] = save_figure(fig, outPath, varargin)
             set(fig, 'PaperPositionMode', 'auto');
             print(fig, pngPath, '-dpng', sprintf('-r%d', opt.dpi));
         end
+    end
+
+    if any(strcmpi(opt.format, 'svg'))
+        svgPath = fullfile(parent, [base '.svg']);
+        set(fig, 'PaperPositionMode', 'auto');
+        print(fig, svgPath, '-dsvg');
     end
 end

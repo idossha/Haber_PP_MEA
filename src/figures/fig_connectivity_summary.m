@@ -40,7 +40,7 @@ function [results, summaryTable, stats] = fig_connectivity_summary(study, vararg
 %                    fields (hierarchical bootstrap CI + p, Wilcoxon,
 %                    Hedges' g_av).
 %
-%   Also writes <study>_connectivity_summary.png to cfg.paths.figures_out.
+%   Also writes <study>_connectivity_summary.png to output/fig{3,5}/panels/.
 %
 % See also: RUN_CONNECTIVITY, NETWORK_METRICS, PAIRED_STATS,
 %           FIG_CONNECTIVITY_EXEMPLAR.
@@ -154,10 +154,12 @@ function [results, summaryTable, stats] = fig_connectivity_summary(study, vararg
     % --- Nature/NPP styling -----------------------------------------------
     apply_nature_style(fig);
 
-    if ~exist(cfg.paths.figures_out, 'dir')
-        mkdir(cfg.paths.figures_out);
-    end
-    outFile = fullfile(cfg.paths.figures_out, ...
+    panelDir = output_path(cfg, study, 'connectivity', 'panels');
+    statsDir = output_path(cfg, study, 'connectivity', 'stats');
+    if ~exist(panelDir, 'dir'); mkdir(panelDir); end
+    if ~exist(statsDir, 'dir'); mkdir(statsDir); end
+
+    outFile = fullfile(panelDir, ...
         sprintf('%s_connectivity_summary.png', study));
     save_figure(fig, outFile);
     fprintf('fig_connectivity_summary(%s): saved %s\n', study, outFile);
@@ -189,15 +191,13 @@ function [results, summaryTable, stats] = fig_connectivity_summary(study, vararg
         row.hedges_g_av       = s.hedgesGav;
         metricTable(end+1) = row; %#ok<AGROW>
     end
-    % One stats file per metric (CSV/JSON) and a single summary table.
-    baseDir = fullfile(cfg.paths.figures_out, sprintf('%s_connectivity_stats', study));
-    if ~exist(baseDir, 'dir'); mkdir(baseDir); end
+    % One stats file per metric (CSV/JSON).
     for m = 1:numel(metricTable)
         export_figure_stats(metricTable(m), ...
-            fullfile(baseDir, sprintf('%s_%s', study, metricTable(m).metric)));
+            fullfile(statsDir, sprintf('%s_%s', study, metricTable(m).metric)));
     end
     % Tidy-table CSV for paper-writing.
-    tidyPath = fullfile(cfg.paths.figures_out, ...
+    tidyPath = fullfile(statsDir, ...
         sprintf('%s_connectivity_metrics.csv', study));
     try
         writetable(struct2table(metricTable), tidyPath);

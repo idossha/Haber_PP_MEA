@@ -3,7 +3,7 @@ function fig_connectivity_exemplar(study, varargin)
 %
 %   FIG_CONNECTIVITY_EXEMPLAR(study) picks one representative pair from
 %   STUDY ('doi' or 'ket'), builds the panels of the connectivity figure,
-%   and writes <study>_connectivity_exemplar.png to cfg.paths.figures_out.
+%   and writes <study>_connectivity_exemplar.png to output/fig{3,5}/panels/.
 %
 %   Panel A  - two channel-pair cross-correlograms, baseline vs treatment.
 %   Panel B  - adjacency heatmaps: baseline | treatment | delta.
@@ -24,7 +24,7 @@ function fig_connectivity_exemplar(study, varargin)
 %   study  -  'doi' | 'ket'
 %
 % OUTPUTS:
-%   One PNG at <cfg.paths.figures_out>/<study>_connectivity_exemplar.png
+%   One PNG at output/fig{3,5}/panels/<study>_connectivity_exemplar.png
 %
 % See also: CONNECTIVITY_XCORR, PLOT_NETWORK_ON_MEA, RUN_CONNECTIVITY.
 
@@ -39,6 +39,9 @@ function fig_connectivity_exemplar(study, varargin)
     addParameter(p, 'normalization',    cfg.connectivity.normalization);
     addParameter(p, 'edgeThresholdPct', 100 * cfg.connectivity.edge_density, ...
         @(x) isscalar(x) && x >= 0 && x <= 100);
+    addParameter(p, 'outName',          '');
+    addParameter(p, 'outDir',          output_path(cfg, study, 'connectivity', 'panels'));
+    addParameter(p, 'statsDir',        output_path(cfg, study, 'connectivity', 'stats'));
     parse(p, study, varargin{:});
     opt = p.Results;
     study = lower(opt.study);
@@ -143,11 +146,15 @@ function fig_connectivity_exemplar(study, varargin)
     apply_nature_style(fig);
 
     % --- Save -----------------------------------------------------------
-    if ~exist(cfg.paths.figures_out, 'dir')
-        mkdir(cfg.paths.figures_out);
+    if ~exist(opt.outDir, 'dir')
+        mkdir(opt.outDir);
     end
-    outFile = fullfile(cfg.paths.figures_out, ...
-        sprintf('%s_connectivity_exemplar.png', study));
+    if isempty(opt.outName)
+        outBase = sprintf('%s_connectivity_exemplar', study);
+    else
+        outBase = opt.outName;
+    end
+    outFile = fullfile(opt.outDir, [outBase '.png']);
     save_figure(fig, outFile);
     fprintf('fig_connectivity_exemplar(%s): saved %s\n', study, outFile);
 
@@ -172,8 +179,8 @@ function fig_connectivity_exemplar(study, varargin)
         'normalization',              opt.normalization, ...
         'edge_threshold_pct',         opt.edgeThresholdPct, ...
         'figure_file',                outFile);
-    export_figure_stats(stats, fullfile(cfg.paths.figures_out, ...
-        sprintf('%s_connectivity_exemplar_stats', study)));
+    if ~exist(opt.statsDir, 'dir'); mkdir(opt.statsDir); end
+    export_figure_stats(stats, fullfile(opt.statsDir, [outBase '_stats']));
 end
 
 % =========================================================================
@@ -231,7 +238,8 @@ function [c, lags] = pair_xcorr(tsI, tsJ, binSec, durationSec, maxLagMs)
     xj = (xj - muJ) / sdJ;
     maxLagBins = round(maxLagMs / (binSec * 1000));
     [c, lagBins] = xcorr(xi, xj, maxLagBins, 'unbiased');
-    c = c / nBins;
+    % Note: xcorr 'unbiased' already normalizes; no extra 1/nBins needed.
+    % c = c / nBins;  % REMOVED: was a double-normalization bug
     lags = lagBins * binSec * 1000;
 end
 

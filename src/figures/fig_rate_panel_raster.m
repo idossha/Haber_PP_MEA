@@ -23,7 +23,7 @@ function fig_rate_panel_raster(study, varargin)
 %   study  -  'doi' | 'ket'
 %
 % OUTPUTS:
-%   PDF + PNG sidecars written to cfg.paths.figures_out.
+%   PDF + PNG sidecars written to output/fig{2,4}/panels/.
 %
 % See also: FIG_RATE_PANEL_TRACES, LOAD_PAIR_SPIKES, LOAD_CACHE.
 
@@ -35,6 +35,7 @@ function fig_rate_panel_raster(study, varargin)
     addParameter(p, 'channels',  cfg.channels.default);
     addParameter(p, 'tickWidth', 0.4);
     addParameter(p, 'outName',   '');
+    addParameter(p, 'outDir',    output_path(cfg, study, 'rates', 'panels'));
     parse(p, study, varargin{:});
     opt = p.Results;
     study = lower(opt.study);
@@ -56,7 +57,9 @@ function fig_rate_panel_raster(study, varargin)
     % --- Load spike times from cache (no re-processing) ----------------
     [bSpikes, tSpikes, bMeta, tMeta] = load_pair_spikes(pair, opt.channels, cfg);
 
-    fig = create_panel_figure(18.0, 4.2);
+    % Panel sized for the LEFT 42% slot in a 183 mm composite (77 mm wide).
+    % Height reduced proportionally so text/lines are at final print size.
+    fig = create_panel_figure(7.7, 3.5);
     tl = tiledlayout(fig, 1, 2, 'Padding', 'compact', 'TileSpacing', 'compact');
     title(tl, sprintf('Raster: %s  vs  %s   (pair %d)', ...
         labels.baseline, labels.treatment, pairIdx), ...
@@ -74,15 +77,15 @@ function fig_rate_panel_raster(study, varargin)
     apply_nature_style(fig);
 
     % --- Save -----------------------------------------------------------
-    if ~exist(cfg.paths.figures_out, 'dir')
-        mkdir(cfg.paths.figures_out);
+    if ~exist(opt.outDir, 'dir')
+        mkdir(opt.outDir);
     end
     if isempty(opt.outName)
         outBase = sprintf('%s_rate_panel_B_raster', study);
     else
         outBase = opt.outName;
     end
-    outFile = fullfile(cfg.paths.figures_out, [outBase '.png']);
+    outFile = fullfile(opt.outDir, [outBase '.png']);
     save_figure(fig, outFile);
     close(fig);
 
@@ -123,6 +126,6 @@ function plot_raster_column(ax, spikeTimes, durSec, ttl, tickW)
     ylabel(ax, 'Channel',   'FontWeight', 'bold');
     title(ax, ttl, 'FontWeight', 'bold');
     box(ax, 'on');
-    set(ax, 'FontSize', 11);
+    set(ax, 'FontSize', 6);
     hold(ax, 'off');
 end

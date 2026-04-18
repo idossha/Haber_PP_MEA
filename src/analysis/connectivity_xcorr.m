@@ -86,7 +86,7 @@ function result = connectivity_xcorr(spikeTimesByChannel, varargin)
             sd(sd == 0) = 1;
             binnedZ = (binned - mu) ./ sd;
             xcorrMode = 'unbiased';
-            scale = 1 / nBins;
+            scale = 1;  % xcorr 'unbiased' already normalizes by (N-|lag|)
         case 'coeff'
             binnedZ = binned;
             xcorrMode = 'coeff';

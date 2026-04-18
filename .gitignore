@@ -14,6 +14,13 @@ tmp/
 PLAN.md
 TODO.md
 
+# === Python
+.ipynb_checkpoints/
+__pycache__/
+
+# === MCP
+.playwright-mcp/
+
 # === Third-party SDK (not ours to distribute) ===
 TDTMatlabSDK/
 

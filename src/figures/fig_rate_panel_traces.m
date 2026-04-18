@@ -29,11 +29,11 @@ function fig_rate_panel_traces(study, varargin)
 %   Options (Name-Value):
 %     'pairIndex'     which pair from get_pairs_and_labels (default: mid)
 %     'channels'      explicit (1 x N) channel list (default: auto)
-%     'nChannels'     number of rows when channels is auto (default 10)
+%     'nChannels'     number of rows when channels is auto (default 8)
 %     'zoomSec'       zoom window width in seconds (default 10)
 %     'zoomStartSec' zoom start time in seconds (default 30)
 %     'decimFactor'   decimation for the "entire recording" columns
-%                     (default 4; preserves the 300-2500 Hz spike band)
+%                     (default 4; preserves spike-band detail at 77 mm width)
 %     'outName'       override the output filename stem (default
 %                     '<study>_rate_panel_A_traces')
 
@@ -43,11 +43,12 @@ function fig_rate_panel_traces(study, varargin)
     addRequired(p,  'study', @(s) any(strcmpi(s, {'doi','ket'})));
     addParameter(p, 'pairIndex',    []);
     addParameter(p, 'channels',     []);
-    addParameter(p, 'nChannels',    10);
+    addParameter(p, 'nChannels',    8);
     addParameter(p, 'zoomSec',      10);
     addParameter(p, 'zoomStartSec', 30);
-    addParameter(p, 'decimFactor',  8);
+    addParameter(p, 'decimFactor',  4);
     addParameter(p, 'outName',      '');
+    addParameter(p, 'outDir',       output_path(cfg, study, 'rates', 'panels'));
     parse(p, study, varargin{:});
     opt = p.Results;
     study = lower(opt.study);
@@ -164,20 +165,21 @@ function fig_rate_panel_traces(study, varargin)
     availH = 1 - topMargin - bottomMargin;
     rowH   = (availH - (nCh - 1) * rowGap) / nCh;
 
-    % Taller figure so individual trace rows get ~160 px each at screen
-    % resolution (Chiappalone-style; individual spike waveforms remain
-    % visible instead of collapsing into a solid bar).
-    fig = create_panel_figure(18.0, 8.0);
+    % Panel sized for the LEFT 42% slot in a 183 mm composite (77 mm wide).
+    % At this slot width, text and line sizes survive without down-scaling.
+    % Height reduced proportionally; individual spike waveforms remain
+    % visible (Chiappalone-style).
+    fig = create_panel_figure(7.7, 5.0);
 
     % --- Group titles ---------------------------------------------------
     hdrB = xB1 + (wZoom + zoomFullGap + wFull) / 2;
     hdrT = xT1 + (wZoom + zoomFullGap + wFull) / 2;
     annotation(fig, 'textbox', [hdrB-0.1, 0.955, 0.2, 0.035], ...
         'String', labels.baseline, 'EdgeColor', 'none', ...
-        'HorizontalAlignment', 'center', 'FontSize', 24, 'FontWeight', 'bold');
+        'HorizontalAlignment', 'center', 'FontSize', 7, 'FontWeight', 'bold');
     annotation(fig, 'textbox', [hdrT-0.1, 0.955, 0.2, 0.035], ...
         'String', labels.treatment, 'EdgeColor', 'none', ...
-        'HorizontalAlignment', 'center', 'FontSize', 24, 'FontWeight', 'bold');
+        'HorizontalAlignment', 'center', 'FontSize', 7, 'FontWeight', 'bold');
 
     % --- Trace rows -----------------------------------------------------
     zoomStart = opt.zoomStartSec;
@@ -202,10 +204,10 @@ function fig_rate_panel_traces(study, varargin)
         % µV scale bar on the far right (vertical tick + label).
         scaleX = xT2 + wFull + 0.006;
         annotation(fig, 'line', [scaleX scaleX], [y + rowH*0.25, y + rowH*0.75], ...
-            'Color', 'k', 'LineWidth', 2);
+            'Color', 'k', 'LineWidth', 0.6);
         annotation(fig, 'textbox', [scaleX + 0.006, y + rowH*0.15, 0.09, rowH*0.7], ...
             'String', sprintf('%g \\muV', rowScaleUv(i)), ...
-            'EdgeColor', 'none', 'FontSize', 14, 'FontWeight', 'bold', ...
+            'EdgeColor', 'none', 'FontSize', 6, 'FontWeight', 'bold', ...
             'VerticalAlignment', 'middle');
     end
 
@@ -217,16 +219,16 @@ function fig_rate_panel_traces(study, varargin)
     barZoomW = wZoom * barZoomFracX * 0.5;     % bar is half of the axes width
 
     annotation(fig, 'line', [xB1, xB1 + barZoomW], [scaleY scaleY], ...
-        'Color', 'k', 'LineWidth', 2.5);
+        'Color', 'k', 'LineWidth', 0.6);
     annotation(fig, 'textbox', [xB1, 0.008, wZoom, 0.04], ...
         'String', '10 s', 'EdgeColor', 'none', ...
-        'HorizontalAlignment', 'left', 'FontSize', 16, 'FontWeight', 'bold');
+        'HorizontalAlignment', 'left', 'FontSize', 6, 'FontWeight', 'bold');
 
     annotation(fig, 'line', [xT1, xT1 + barZoomW], [scaleY scaleY], ...
-        'Color', 'k', 'LineWidth', 2.5);
+        'Color', 'k', 'LineWidth', 0.6);
     annotation(fig, 'textbox', [xT1, 0.008, wZoom, 0.04], ...
         'String', '10 s', 'EdgeColor', 'none', ...
-        'HorizontalAlignment', 'left', 'FontSize', 16, 'FontWeight', 'bold');
+        'HorizontalAlignment', 'left', 'FontSize', 6, 'FontWeight', 'bold');
 
     % 60 s bars under the two full columns (fraction of full duration).
     if bDur > 0
@@ -236,30 +238,30 @@ function fig_rate_panel_traces(study, varargin)
     end
 
     annotation(fig, 'line', [xB2, xB2 + barFullW], [scaleY scaleY], ...
-        'Color', 'k', 'LineWidth', 2.5);
+        'Color', 'k', 'LineWidth', 0.6);
     annotation(fig, 'textbox', [xB2, 0.008, wFull, 0.04], ...
         'String', '60 s', 'EdgeColor', 'none', ...
-        'HorizontalAlignment', 'left', 'FontSize', 16, 'FontWeight', 'bold');
+        'HorizontalAlignment', 'left', 'FontSize', 6, 'FontWeight', 'bold');
 
     annotation(fig, 'line', [xT2, xT2 + barFullW], [scaleY scaleY], ...
-        'Color', 'k', 'LineWidth', 2.5);
+        'Color', 'k', 'LineWidth', 0.6);
     annotation(fig, 'textbox', [xT2, 0.008, wFull, 0.04], ...
         'String', '60 s', 'EdgeColor', 'none', ...
-        'HorizontalAlignment', 'left', 'FontSize', 16, 'FontWeight', 'bold');
+        'HorizontalAlignment', 'left', 'FontSize', 6, 'FontWeight', 'bold');
 
     % --- Nature/NPP styling -----------------------------------------------
     apply_nature_style(fig);
 
     % --- Save -----------------------------------------------------------
-    if ~exist(cfg.paths.figures_out, 'dir')
-        mkdir(cfg.paths.figures_out);
+    if ~exist(opt.outDir, 'dir')
+        mkdir(opt.outDir);
     end
     if isempty(opt.outName)
         outBase = sprintf('%s_rate_panel_A_traces', study);
     else
         outBase = opt.outName;
     end
-    outFile = fullfile(cfg.paths.figures_out, [outBase '.png']);
+    outFile = fullfile(opt.outDir, [outBase '.png']);
     save_figure(fig, outFile);
     close(fig);
 
@@ -285,7 +287,7 @@ function plot_trace(ax, traceVolts, fs, tRangeSec, decim, yLimUv)
         segFs = fs;
     end
     t = (0:numel(seg)-1) / segFs + tRangeSec(1);
-    plot(ax, t, double(seg) * 1e6, 'k', 'LineWidth', 0.15);
+    plot(ax, t, double(seg) * 1e6, 'k', 'LineWidth', 0.3);
     xlim(ax, tRangeSec);
     ylim(ax, yLimUv);
     axis(ax, 'off');

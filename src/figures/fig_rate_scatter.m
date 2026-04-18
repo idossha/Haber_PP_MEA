@@ -8,7 +8,7 @@ function fig_rate_scatter(metric, study, varargin)
 %   FIG_RATE_SCATTER('burst', 'doi')  same for burst rate.
 %
 % OUTPUTS:
-%   PNG + PDF written to cfg.paths.figures_out.
+%   PNG + PDF written to output/fig{2,4}/panels/.
 
     cfg = project_config();
 
@@ -117,7 +117,9 @@ function fig_rate_scatter(metric, study, varargin)
     apply_nature_style(fig);
 
     % --- Save ---
-    outBase = fullfile(cfg.paths.figures_out, ...
+    panelDir = output_path(cfg, study, 'rates', 'panels');
+    if ~exist(panelDir, 'dir'); mkdir(panelDir); end
+    outBase = fullfile(panelDir, ...
         sprintf('%s_%s_rate_scatter', study, metric));
     save_figure(fig, [outBase '.png']);
     close(fig);

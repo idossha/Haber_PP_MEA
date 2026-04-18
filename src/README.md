@@ -153,7 +153,7 @@ everything routes through `config/project_config.m`.
 | Bandpass            | 300-2500 Hz, 4th-order Butterworth, zero-phase |
 | Spike detection     | `TDTthresh` MODE=auto, POLARITY=-1, STD=6.5, TAU=5 |
 | Burst detection     | ISI <= 100 ms starts, ISI > 200 ms ends, min 3 spikes |
-| Channels            | 1:64 |
+| Channels            | 1:60 (59 recording + 1 iR reference) |
 
 ## Archive
 

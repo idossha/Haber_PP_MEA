@@ -19,7 +19,7 @@ function fig_rate_change_bar(metric, study, varargin)
 %   'minRateThreshold'      -  burst metric only, default 0 (bursts/min)
 %
 % OUTPUTS:
-%   PNG written to <cfg.paths.figures_out>/<study>_<metric>_rate_change_categories.png
+%   PNG written to output/fig{2,4}/panels/<study>_<metric>_rate_change_categories.png
 %   plus chi-square text on stdout.
 
     cfg = project_config();
@@ -131,10 +131,11 @@ function fig_rate_change_bar(metric, study, varargin)
         error('fig_rate_change_bar:NoData', 'No recordings with non-empty denominator.');
     end
 
-    if ~exist(cfg.paths.figures_out, 'dir')
-        mkdir(cfg.paths.figures_out);
-    end
-    outFile = fullfile(cfg.paths.figures_out, ...
+    panelDir = output_path(cfg, study, 'rates', 'panels');
+    statsDir = output_path(cfg, study, 'rates', 'stats');
+    if ~exist(panelDir, 'dir'); mkdir(panelDir); end
+    if ~exist(statsDir, 'dir'); mkdir(statsDir); end
+    outFile = fullfile(panelDir, ...
         sprintf('%s_%s_rate_change_categories.png', study, metric));
 
     [~, labels] = get_pairs_and_labels(cfg, study);
@@ -172,7 +173,7 @@ function fig_rate_change_bar(metric, study, varargin)
         'pct_increase_of_directional',  chi2Result.pctInc, ...
         'pct_decrease_of_directional',  chi2Result.pctDec, ...
         'figure_file',       outFile);
-    export_figure_stats(stats, fullfile(cfg.paths.figures_out, ...
+    export_figure_stats(stats, fullfile(statsDir, ...
         sprintf('%s_%s_rate_change_stats', study, metric)));
 end
 

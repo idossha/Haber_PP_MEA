@@ -5,7 +5,7 @@ function fig_burst_rate(study, varargin)
 %   study, applies the canonical burst-silence channel filter
 %   (drop pairs with both baseline and treatment burst rate <
 %   minRateThreshold; threshold == 0 drops only the (0, 0) pairs), then
-%   writes two figures to cfg.paths.figures_out:
+%   writes two figures to output/fig{2,4}/panels/:
 %       <study>_burst_rate_paired.png
 %       <study>_burst_rate_boxplot.png
 %
@@ -21,7 +21,7 @@ function fig_burst_rate(study, varargin)
 %   study  -  'doi' or 'ket'.
 %
 % OUTPUTS:
-%   PNG files written to cfg.paths.figures_out.
+%   PNG files written to output/fig{2,4}/panels/.
 
     cfg = project_config();
 
@@ -96,13 +96,14 @@ function fig_burst_rate(study, varargin)
     pctIncrease = 100 * sum(tRates > bRates) / nCh;
     pctDecrease = 100 * sum(tRates < bRates) / nCh;
 
-    if ~exist(cfg.paths.figures_out, 'dir')
-        mkdir(cfg.paths.figures_out);
-    end
+    panelDir = output_path(cfg, study, 'rates', 'panels');
+    statsDir = output_path(cfg, study, 'rates', 'stats');
+    if ~exist(panelDir, 'dir'); mkdir(panelDir); end
+    if ~exist(statsDir, 'dir'); mkdir(statsDir); end
 
     colors      = paired_plot_colors(study);
-    pairedFile  = fullfile(cfg.paths.figures_out, sprintf('%s_burst_rate_paired.png',  study));
-    boxplotFile = fullfile(cfg.paths.figures_out, sprintf('%s_burst_rate_boxplot.png', study));
+    pairedFile  = fullfile(panelDir, sprintf('%s_burst_rate_paired.png',  study));
+    boxplotFile = fullfile(panelDir, sprintf('%s_burst_rate_boxplot.png', study));
 
     yLabelText = 'Burst rate (bursts min^{-1})';
     titleText  = sprintf('Burst rate: %s vs. %s', ...
@@ -145,6 +146,6 @@ function fig_burst_rate(study, varargin)
         'hedges_g_av',      psStats.hedgesGav, ...
         'figures_paired',   pairedFile, ...
         'figures_boxplot',  boxplotFile);
-    export_figure_stats(stats, fullfile(cfg.paths.figures_out, ...
+    export_figure_stats(stats, fullfile(statsDir, ...
         sprintf('%s_burst_rate_stats', study)));
 end
