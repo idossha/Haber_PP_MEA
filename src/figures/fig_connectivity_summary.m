@@ -205,7 +205,7 @@ function [results, summaryTable, stats] = fig_connectivity_summary(study, vararg
         warning('fig_connectivity_summary:CsvFailed', ...
             'Could not write tidy table: %s', ME.message);
     end
-    fprintf('fig_connectivity_summary(%s): stats at %s\n', study, baseDir);
+    fprintf('fig_connectivity_summary(%s): stats at %s\n', study, statsDir);
 end
 
 % =========================================================================

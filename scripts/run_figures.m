@@ -35,6 +35,7 @@ function run_figures(varargin)
     nTotal = 0; nOk = 0; nErr = 0;
     errors = {};
 
+    % --- Per-study figures (Figs 2-5) ------------------------------------
     for s = 1:numel(studies)
         study = studies{s};
         calls = {
@@ -55,6 +56,12 @@ function run_figures(varargin)
                 'fig_connectivity_summary',   {study};
                 'fig_connectivity_exemplar',  {study}}];
         end
+        % SI panels
+        calls = [calls; { ...
+            'fig_si_zoomed_raster',          {study};
+            'fig_si_burst_scatter',          {study};
+            'fig_si_burst_overlay_raster',   {study}}];
+
         for k = 1:size(calls, 1)
             fname = calls{k, 1};
             args  = calls{k, 2};
@@ -75,6 +82,56 @@ function run_figures(varargin)
             end
             close all;
         end
+    end
+
+    % --- Adjacency matrices (CSV export + Python heatmap plots) ------------
+    if opt.connectivity
+        nTotal = nTotal + 1;
+        label = 'gen_standalone_adj + plot_standalone_adj.py';
+        try
+            fprintf('  [%2d] %s\n', nTotal, label);
+            gen_standalone_adj();
+
+            cfg = project_config();
+            pyScript = fullfile(cfg.paths.root, 'scripts', 'plot_standalone_adj.py');
+            [status, result] = system(sprintf('python3 "%s"', pyScript));
+            if status ~= 0
+                error('run_figures:PythonFailed', ...
+                    'plot_standalone_adj.py failed:\n%s', result);
+            end
+            fprintf('%s', result);
+            nOk = nOk + 1;
+        catch ME
+            nErr = nErr + 1;
+            fprintf('       ERROR: %s\n', ME.message);
+            errors{end+1} = sprintf('%s: %s', label, ME.message); %#ok<AGROW>
+        end
+        close all;
+    end
+
+    % --- Study-independent figures (shared) -------------------------------
+    sharedCalls = {
+        'fig_mea_channel_map',  {};
+    };
+    for k = 1:size(sharedCalls, 1)
+        fname = sharedCalls{k, 1};
+        args  = sharedCalls{k, 2};
+        nTotal = nTotal + 1;
+        label = sprintf('%s(%s)', fname, argstr(args));
+        try
+            fprintf('  [%2d] %s\n', nTotal, label);
+            fcn = str2func(fname);
+            fcn(args{:});
+            nOk = nOk + 1;
+        catch ME
+            nErr = nErr + 1;
+            fprintf('       ERROR: %s\n', ME.message);
+            errors{end+1} = sprintf('%s: %s', label, ME.message); %#ok<AGROW>
+            if ~isempty(ME.stack)
+                fprintf('       at %s:%d\n', ME.stack(1).name, ME.stack(1).line);
+            end
+        end
+        close all;
     end
 
     fprintf('\n==== run_figures summary ====\n');
