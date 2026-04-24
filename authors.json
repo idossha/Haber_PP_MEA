@@ -122,8 +122,8 @@
     {
       "order": 4,
       "given_name": "Maya",
-      "family_name": "Norenberg",
-      "full_name": "Maya Norenberg",
+      "family_name": "Nornberg",
+      "full_name": "Maya Nornberg",
       "orcid": null,
       "email": null,
       "affiliations": [
@@ -144,7 +144,7 @@
         "Writing – review & editing"
       ],
       "corresponding": false,
-      "notes": "Undergraduate researcher (BME '26) in the Hai Lab, focused on studying psychedelic effects on neuronal plasticity using MEAs and large-scale calcium imaging. Hai Lab page lists the spelling as 'Maya Nornberg' but Ido confirmed 'Norenberg'. No public ORCID or email found.",
+      "notes": "Undergraduate researcher (BME '26) in the Hai Lab, focused on studying psychedelic effects on neuronal plasticity using MEAs and large-scale calcium imaging. Spelling corrected to 'Nornberg' per v1.7 docx. No public ORCID or email found.",
       "sources": [
         "https://hailab.wisc.edu/People.html"
       ]
@@ -247,6 +247,15 @@
           "department": "Department of Electrical and Computer Engineering (affiliated)",
           "institute": null,
           "institution": "University of Wisconsin–Madison",
+          "city": "Madison",
+          "state": "WI",
+          "country": "USA",
+          "is_primary": false
+        },
+        {
+          "department": "Wisconsin Institute for Translational Neuroengineering",
+          "institute": null,
+          "institution": "University of Wisconsin-Madison",
           "city": "Madison",
           "state": "WI",
           "country": "USA",
