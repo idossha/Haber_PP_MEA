@@ -31,6 +31,9 @@ function ax = plot_network_on_mea(adjacency, varargin)
 %     'title'          axis title (default '')
 %     'showCorners'    logical, draw grey rectangles at the 4 missing
 %                      corner positions (default false)
+%     'showLabels'     logical, overlay MCS electrode labels (e.g. "47")
+%                      below each node (default false)
+%     'labelFontSize'  font size for electrode labels (default 6)
 %
 % INPUTS:
 %   adjacency  -  nCh x nCh matrix (symmetric, weighted). For 'delta'
@@ -66,6 +69,8 @@ function ax = plot_network_on_mea(adjacency, varargin)
     addParameter(p, 'edgeWidthRange',   [0.5 3]);
     addParameter(p, 'title',            '');
     addParameter(p, 'showCorners',      false, @(x) islogical(x) && isscalar(x));
+    addParameter(p, 'showLabels',       false, @(x) islogical(x) && isscalar(x));
+    addParameter(p, 'labelFontSize',    6,     @(x) isscalar(x) && x > 0);
     parse(p, adjacency, varargin{:});
     opt = p.Results;
 
@@ -231,6 +236,18 @@ function ax = plot_network_on_mea(adjacency, varargin)
         end
         scatter(ax, x, y, sz, faceColor, 'filled', ...
                 'MarkerEdgeColor', [0.2 0.2 0.2], 'LineWidth', 0.75);
+    end
+
+    % --- Optional MCS electrode labels on each node ---
+    if opt.showLabels
+        for c = 1:nCh
+            x = layout.xCoord(c);
+            y = layout.yCoord(c);
+            text(ax, x, y - 0.35, sprintf('%d', layout.mcsLabels(c)), ...
+                'HorizontalAlignment', 'center', 'VerticalAlignment', 'top', ...
+                'FontSize', opt.labelFontSize, 'FontName', 'Arial', ...
+                'Color', [0.15 0.15 0.15]);
+        end
     end
 
     hold(ax, 'off');

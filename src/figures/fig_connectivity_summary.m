@@ -151,6 +151,17 @@ function [results, summaryTable, stats] = fig_connectivity_summary(study, vararg
     ax4 = nexttile(tl, 4);
     plot_spatial_decay(ax4, results, colors, labels);
 
+    % --- Spatial-decay slope test (per-well regression slope) -------------
+    slopeStats = spatial_decay_slope_test(results);
+    if slopeStats.pSlope < 0.001
+        pStr = 'p_{slope} < 0.001';
+    else
+        pStr = sprintf('p_{slope} = %.3f', slopeStats.pSlope);
+    end
+    text(ax4, 0.97, 0.97, sprintf('Slope test: %s', pStr), ...
+        'Units', 'normalized', 'HorizontalAlignment', 'right', ...
+        'VerticalAlignment', 'top', 'FontSize', 7, 'FontName', 'Arial');
+
     % --- Nature/NPP styling -----------------------------------------------
     apply_nature_style(fig);
 
@@ -475,4 +486,53 @@ function s = format_p(p)
     else
         s = sprintf('%.3f', p);
     end
+end
+
+% =========================================================================
+function out = spatial_decay_slope_test(results)
+%SPATIAL_DECAY_SLOPE_TEST  Per-well OLS slope of |weight| ~ distance.
+%   Tests whether the spatial decay slope differs between baseline and
+%   treatment using a paired Wilcoxon signed-rank test on per-well slopes.
+    layout   = mea60_layout();
+    D        = layout.distanceMatrix;
+    upper    = triu(true(size(D)), 1);
+    distVec  = D(upper);
+    nPairs   = numel(results);
+
+    baseSlopes  = nan(nPairs, 1);
+    treatSlopes = nan(nPairs, 1);
+    for k = 1:nPairs
+        bA = results(k).baseline.adjacency;
+        tA = results(k).treatment.adjacency;
+        bA(isnan(bA)) = 0;
+        tA(isnan(tA)) = 0;
+        baseSlopes(k)  = ols_slope(abs(bA(upper)), distVec);
+        treatSlopes(k) = ols_slope(abs(tA(upper)), distVec);
+    end
+
+    slopeDiff  = treatSlopes - baseSlopes;
+    if nPairs >= 5
+        [pSlope, ~, w] = signrank(baseSlopes, treatSlopes);
+    else
+        [pSlope, ~, w] = signrank(baseSlopes, treatSlopes, 'method', 'exact');
+    end
+
+    out.baseSlopes  = baseSlopes;
+    out.treatSlopes = treatSlopes;
+    out.slopeDiff   = slopeDiff;
+    out.medianDiff  = median(slopeDiff);
+    out.pSlope      = pSlope;
+    if isfield(w, 'signedrank')
+        out.statistic = w.signedrank;
+    else
+        out.statistic = NaN;
+    end
+end
+
+% =========================================================================
+function slope = ols_slope(w, d)
+%OLS_SLOPE  Simple OLS slope of w on d.
+    X = [ones(numel(d), 1), d(:)];
+    b = X \ w(:);
+    slope = b(2);
 end

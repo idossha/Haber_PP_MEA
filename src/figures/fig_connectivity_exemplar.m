@@ -145,7 +145,7 @@ function fig_connectivity_exemplar(study, varargin)
     % --- Nature/NPP styling -----------------------------------------------
     apply_nature_style(fig);
 
-    % --- Save -----------------------------------------------------------
+    % --- Save (standard, unlabeled) --------------------------------------
     if ~exist(opt.outDir, 'dir')
         mkdir(opt.outDir);
     end
@@ -157,6 +157,22 @@ function fig_connectivity_exemplar(study, varargin)
     outFile = fullfile(opt.outDir, [outBase '.png']);
     save_figure(fig, outFile);
     fprintf('fig_connectivity_exemplar(%s): saved %s\n', study, outFile);
+
+    % --- Save annotated version (MCS electrode labels on network) ---------
+    layout = mea60_layout();
+    for axH = [axC1, axC2, axC3]
+        hold(axH, 'on');
+        for ch = 1:layout.nCh
+            text(axH, layout.xCoord(ch), layout.yCoord(ch) - 0.35, ...
+                sprintf('%d', layout.mcsLabels(ch)), ...
+                'HorizontalAlignment', 'center', 'VerticalAlignment', 'top', ...
+                'FontSize', 5, 'FontName', 'Arial', 'Color', [0.15 0.15 0.15]);
+        end
+        hold(axH, 'off');
+    end
+    annotFile = fullfile(opt.outDir, [outBase '_annotated.png']);
+    save_figure(fig, annotFile);
+    fprintf('fig_connectivity_exemplar(%s): saved %s\n', study, annotFile);
 
     % --- Numeric sidecar ------------------------------------------------
     stats = struct( ...

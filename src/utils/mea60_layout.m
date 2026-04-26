@@ -36,7 +36,9 @@ function layout = mea60_layout()
 %     channel of each bank is ground (PZ5 ch 16,32,48,64).  The 60
 %     signal channels occupy PZ5 ch [1:15, 17:31, 33:47, 49:63],
 %     which map sequentially to MCS 1-dim pins 1-60.
-%   - MCS labels: tens digit = row, units digit = column.
+%   - MCS labels: tens digit = column, units digit = row.
+%     (MCS convention: label = col*10 + row.  E.g. electrode 23 is
+%      column 2, row 3.  See docs/60StandardMEA_Layout.pdf page 2.)
 %   - On iR-model MEAs (60MEA100/10iR), MCS pin 15 (PZ5 ch 15) is the
 %     internal reference electrode — a large reference pad, not a
 %     recording electrode (59 recording + 1 ref).
@@ -58,8 +60,8 @@ function layout = mea60_layout()
         73, 83, 64, 74, 84, 85, 75, 65, 86, 76, ...
         87, 77, 66, 78, 67, 68, 55, 56, 58, 57];
 
-    rows = floor(elecLabels / 10);
-    cols = mod(elecLabels, 10);
+    cols = floor(elecLabels / 10);   % tens digit = column (MCS convention)
+    rows = mod(elecLabels, 10);     % ones digit = row    (MCS convention)
 
     layout = struct();
     layout.nCh         = numel(chList);
