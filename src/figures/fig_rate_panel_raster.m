@@ -35,7 +35,7 @@ function fig_rate_panel_raster(study, varargin)
     addParameter(p, 'channels',  cfg.channels.default);
     addParameter(p, 'tickWidth', 0.4);
     addParameter(p, 'outName',   '');
-    addParameter(p, 'outDir',    output_path(cfg, study, 'rates', 'panels'));
+    addParameter(p, 'outDir',    fullfile(output_path(cfg, study, 'rates', ''), 'raster'));
     parse(p, study, varargin{:});
     opt = p.Results;
     study = lower(opt.study);

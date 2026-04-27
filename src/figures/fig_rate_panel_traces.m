@@ -48,7 +48,7 @@ function fig_rate_panel_traces(study, varargin)
     addParameter(p, 'zoomStartSec', 30);
     addParameter(p, 'decimFactor',  4);
     addParameter(p, 'outName',      '');
-    addParameter(p, 'outDir',       output_path(cfg, study, 'rates', 'panels'));
+    addParameter(p, 'outDir',       fullfile(output_path(cfg, study, 'rates', ''), 'traces'));
     parse(p, study, varargin{:});
     opt = p.Results;
     study = lower(opt.study);
@@ -118,26 +118,21 @@ function fig_rate_panel_traces(study, varargin)
     end
 
     % --- Per-row amplitude scale (joint baseline+treatment) -----------
-    % For the trace-display amplitude we want the *spike peak* amplitude,
-    % not the band-limited noise floor. The band-limited noise floor
-    % dominates lower percentiles because spikes are rare (~1000 spike
-    % samples out of ~14M total). We use the max of:
-    %   (a) 99.95 percentile of |x| (robust spike peak)
-    %   (b) 8 * robust noise SD (lower bound; protects channels whose
-    %       99.95 is still in the noise band)
+    % For the trace-display amplitude we use the true max(|x|) across
+    % both conditions so that no spike is clipped.  A noise-floor lower
+    % bound (8 * robust SD) protects channels whose max is negligible.
     rowScaleUv = zeros(1, nCh);
     for i = 1:nCh
         bx = abs(double(bTraces{i})) * 1e6;
         tx = abs(double(tTraces{i})) * 1e6;
-        % Spike-peak estimate
-        p995B = prctile(bx, 99.95);
-        p995T = prctile(tx, 99.95);
+        peakB = max(bx);
+        peakT = max(tx);
         % Noise floor estimate (MAD)
         nB = mad(double(bTraces{i}), 1) * 1e6 / 0.6745;
         nT = mad(double(tTraces{i}), 1) * 1e6 / 0.6745;
-        raw = max([p995B, p995T, 8 * nB, 8 * nT]);
+        raw = max([peakB, peakT, 8 * nB, 8 * nT]);
         if raw <= 0 || ~isfinite(raw); raw = 50; end
-        rowScaleUv(i) = nice_round_uv(raw * 1.15);
+        rowScaleUv(i) = nice_round_uv(raw * 1.05);
     end
 
     % =========================================================================

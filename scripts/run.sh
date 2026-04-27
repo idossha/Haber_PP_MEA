@@ -10,7 +10,8 @@
 #   ./scripts/run.sh figures               # render every figure (DOI + ket)
 #   ./scripts/run.sh figures doi           # DOI figures only
 #   ./scripts/run.sh figures ket           # ketanserin figures only
-#   ./scripts/run.sh figures doi no-conn   # skip connectivity figures
+#   ./scripts/run.sh figures doi rates     # DOI rate panels only
+#   ./scripts/run.sh figures all connectivity  # connectivity panels only
 #   ./scripts/run.sh all                   # smoke + preprocess + figures
 #   ./scripts/run.sh matlab "<expr>"       # run an arbitrary MATLAB expression
 #
@@ -75,20 +76,15 @@ case "$cmd" in
 
     figures)
         study="${1:-all}"
-        conn="${2:-}"
-        if [[ "$conn" == "no-conn" ]]; then
-            connFlag="false"
-        else
-            connFlag="true"
-        fi
-        run_matlab "figures_${study}" \
-            "run_figures('study','${study}','connectivity',${connFlag})"
+        category="${2:-all}"
+        run_matlab "figures_${study}_${category}" \
+            "run_figures('study','${study}','category','${category}')"
         ;;
 
     all)
         run_matlab smoke            "smoke_test"
         run_matlab preprocess_all   "run_preprocess('study','all','overwrite',false)"
-        run_matlab figures_all      "run_figures('study','all','connectivity',true)"
+        run_matlab figures_all      "run_figures('study','all')"
         ;;
 
     matlab)
@@ -107,7 +103,7 @@ run.sh — headless MATLAB entrypoint for Haber_PP_MEA
 Commands:
   smoke                          Run scripts/smoke_test.m
   preprocess [study] [force]     Build v2.0 caches (study: all|doi|ket)
-  figures    [study] [no-conn]   Render figures (study: all|doi|ket)
+  figures    [study] [category]  Render figures (study: all|doi|ket; category: all|rates|connectivity|si|shared)
   all                            smoke + preprocess + figures
   matlab     "<expr>"            Run an arbitrary MATLAB expression
   help                           Show this message
@@ -119,7 +115,7 @@ Examples:
   ./scripts/run.sh smoke
   ./scripts/run.sh preprocess doi
   ./scripts/run.sh preprocess all force
-  ./scripts/run.sh figures doi no-conn
+  ./scripts/run.sh figures doi rates
   ./scripts/run.sh all
   ./scripts/run.sh matlab "disp(project_config().paths.cache)"
 

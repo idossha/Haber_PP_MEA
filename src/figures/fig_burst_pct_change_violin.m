@@ -102,7 +102,7 @@ function fig_burst_pct_change_violin(study, varargin)
         error('fig_burst_pct_change_violin:NoData', 'Filters left no observations.');
     end
 
-    panelDir = output_path(cfg, study, 'rates', 'panels');
+    panelDir = output_path(cfg, study, 'rates', '');
     statsDir = output_path(cfg, study, 'rates', 'stats');
     if ~exist(panelDir, 'dir'); mkdir(panelDir); end
     if ~exist(statsDir, 'dir'); mkdir(statsDir); end

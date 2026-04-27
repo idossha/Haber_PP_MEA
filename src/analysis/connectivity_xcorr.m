@@ -101,16 +101,63 @@ function result = connectivity_xcorr(spikeTimesByChannel, varargin)
     adjacency = nan(nCh, nCh);
     peakLagMs = nan(nCh, nCh);
 
-    for i = 1:nCh
-        for j = i+1:nCh
-            [c, lags] = xcorr(binnedZ(i, :), binnedZ(j, :), maxLag, xcorrMode);
-            c = c * scale;
-            [peakVal, idx] = max(c);
-            adjacency(i, j) = peakVal;
-            adjacency(j, i) = peakVal;
-            peakLagMs(i, j) =  lags(idx) * opt.binMs;
-            peakLagMs(j, i) = -lags(idx) * opt.binMs;
+    % --- Vectorised FFT-based cross-correlation ---
+    % One FFT per channel (60 total) instead of two per pair (3540 total).
+    % Cross-spectra are computed via element-wise multiply in frequency
+    % domain, then batch-IFFT extracts only the ±maxLag window.
+    % We only need circular xcorr to match linear xcorr at |lag| <= maxLag,
+    % so nfft >= nBins + maxLag suffices (much smaller than 2*nBins - 1).
+    nfft = 2^nextpow2(nBins + maxLag);
+    F    = fft(binnedZ, nfft, 2);        % nCh x nfft  (all channels at once)
+
+    lagRange = -maxLag : maxLag;         % e.g. -100:100
+    nLags    = numel(lagRange);
+
+    % IFFT lag-index mapping: lag 0 -> col 1, lag +k -> col k+1,
+    % lag -k -> col nfft-k+1.
+    posIdx = 1 : maxLag + 1;                      % lags 0..+maxLag
+    negIdx = nfft - maxLag + 1 : nfft;            % lags -maxLag..-1
+    extractIdx = [negIdx, posIdx];                 % ordered -maxLag..+maxLag
+
+    % Normalisation denominator for each lag.
+    switch lower(opt.normalization)
+        case 'pearson'
+            denom = nBins - abs(lagRange);         % 'unbiased': N-|k|
+        case 'coeff'
+            % 'coeff' divides by sqrt(Rxx(0)*Ryy(0)); handled per-pair below.
+            denom = ones(1, nLags);
+        otherwise
+            denom = ones(1, nLags);
+    end
+
+    for i = 1:nCh - 1
+        jIdx = (i + 1) : nCh;
+        nJ   = numel(jIdx);
+
+        % Cross-spectral density: conj(F_i) .* F_j  for all j > i.
+        S = bsxfun(@times, conj(F(i, :)), F(jIdx, :));   % nJ x nfft
+
+        % Batch IFFT and extract the ±maxLag window.
+        cFull    = real(ifft(S, [], 2));                   % nJ x nfft
+        cTrimmed = cFull(:, extractIdx);                   % nJ x nLags
+
+        % Apply normalisation.
+        if strcmpi(opt.normalization, 'coeff')
+            % 'coeff': divide by sqrt(Rxx(0)*Ryy(0)) = sqrt(energy_i * energy_j)
+            Ei  = sum(binnedZ(i, :).^2);
+            Ej  = sum(binnedZ(jIdx, :).^2, 2);
+            cTrimmed = cTrimmed ./ sqrt(Ei .* Ej);
+        else
+            cTrimmed = cTrimmed ./ denom;
         end
+
+        % Peak value and lag for each pair.
+        [peakVals, peakPos] = max(cTrimmed, [], 2);
+
+        adjacency(i, jIdx) = peakVals;
+        adjacency(jIdx, i) = peakVals;
+        peakLagMs(i, jIdx) =  lagRange(peakPos) * opt.binMs;
+        peakLagMs(jIdx, i) = -lagRange(peakPos) * opt.binMs;
     end
 
     result.adjacency     = adjacency;

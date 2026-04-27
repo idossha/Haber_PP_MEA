@@ -117,7 +117,7 @@ function fig_rate_scatter(metric, study, varargin)
     apply_nature_style(fig);
 
     % --- Save ---
-    panelDir = output_path(cfg, study, 'rates', 'panels');
+    panelDir = output_path(cfg, study, 'rates', '');
     if ~exist(panelDir, 'dir'); mkdir(panelDir); end
     outBase = fullfile(panelDir, ...
         sprintf('%s_%s_rate_scatter', study, metric));

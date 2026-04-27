@@ -1,32 +1,21 @@
 function fig_connectivity_exemplar(study, varargin)
-%FIG_CONNECTIVITY_EXEMPLAR Multi-panel connectivity figure for one pair.
+%FIG_CONNECTIVITY_EXEMPLAR Individual connectivity panels for one pair.
 %
-%   FIG_CONNECTIVITY_EXEMPLAR(study) picks one representative pair from
-%   STUDY ('doi' or 'ket'), builds the panels of the connectivity figure,
-%   and writes <study>_connectivity_exemplar.png to output/fig{3,5}/panels/.
+%   FIG_CONNECTIVITY_EXEMPLAR(study) generates individual panel files for
+%   one representative pair from STUDY ('doi' or 'ket'):
 %
-%   Panel A  - two channel-pair cross-correlograms, baseline vs treatment.
-%   Panel B  - adjacency heatmaps: baseline | treatment | delta.
-%   Panel C  - network graph on the 60MEA geometry: baseline, treatment,
-%              and the delta (threshold-based line colour).
+%     2 correlogram CSVs   (strongest baseline edge, largest delta edge)
+%                          — plotted by scripts/plot_correlograms.py
+%     3 adjacency heatmaps (baseline, treatment, delta) — spatially ordered
+%     6 network graphs     (baseline, treatment, delta) x (clean, labeled)
 %
-%   FIG_CONNECTIVITY_EXEMPLAR(study, ...
-%         'pairIndex',         3,       ...
-%         'channels',          1:60,    ...
-%         'binMs',             1,       ...
-%         'maxLagMs',          100,     ...
-%         'edgeThresholdPct',  20,      ...
-%         'normalization',     'pearson')
-%   overrides defaults. 'pairIndex' selects which baseline/treatment
-%   pair to plot (default: middle pair).
+%   Each panel is saved as its own 600 DPI PDF + PNG. Correlogram data is
+%   exported as CSV + JSON metadata for Python rendering.
 %
-% INPUTS:
-%   study  -  'doi' | 'ket'
+%   Output subdirectories under the figure root:
+%     correlogram/   heatmap/   network/
 %
-% OUTPUTS:
-%   One PNG at output/fig{3,5}/panels/<study>_connectivity_exemplar.png
-%
-% See also: CONNECTIVITY_XCORR, PLOT_NETWORK_ON_MEA, RUN_CONNECTIVITY.
+% See also: CONNECTIVITY_XCORR, PLOT_NETWORK_ON_MEA, RUN_FIGURES.
 
     cfg = project_config();
 
@@ -39,13 +28,14 @@ function fig_connectivity_exemplar(study, varargin)
     addParameter(p, 'normalization',    cfg.connectivity.normalization);
     addParameter(p, 'edgeThresholdPct', 100 * cfg.connectivity.edge_density, ...
         @(x) isscalar(x) && x >= 0 && x <= 100);
-    addParameter(p, 'outName',          '');
-    addParameter(p, 'outDir',          output_path(cfg, study, 'connectivity', 'panels'));
+    addParameter(p, 'outDir',          output_path(cfg, study, 'connectivity', ''));
     addParameter(p, 'statsDir',        output_path(cfg, study, 'connectivity', 'stats'));
+    addParameter(p, 'prefix',          '');
     parse(p, study, varargin{:});
     opt = p.Results;
     study = lower(opt.study);
 
+    % --- Pair selection ---------------------------------------------------
     [pairs, labels] = get_pairs_and_labels(cfg, study);
     if isempty(pairs)
         error('fig_connectivity_exemplar:NoPairs', 'No pairs for study %s.', study);
@@ -57,135 +47,105 @@ function fig_connectivity_exemplar(study, varargin)
     end
     pair = pairs(pairIdx);
 
-    fprintf('fig_connectivity_exemplar(%s): pair %d of %d\n  baseline: %s\n  treatment: %s\n', ...
-        study, pairIdx, numel(pairs), pair.baseline, pair.treatment);
+    if isempty(opt.prefix)
+        prefix = study;
+    else
+        prefix = opt.prefix;
+    end
 
-    % --- Load cached spike times and per-channel rates ------------------
+    fprintf('fig_connectivity_exemplar(%s): pair %d/%d  [prefix=%s]\n', ...
+        study, pairIdx, numel(pairs), prefix);
+
+    % --- Load spikes and rates --------------------------------------------
     [bSpikes, tSpikes, bMeta, tMeta] = load_pair_spikes(pair, opt.channels, cfg);
     bCache = load_cache(pair.baseline,  cfg);
     tCache = load_cache(pair.treatment, cfg);
 
-    % --- Run cross-correlation for both halves --------------------------
-    xcorrArgs = { ...
-        'binMs',         opt.binMs, ...
-        'maxLagMs',      opt.maxLagMs, ...
-        'normalization', opt.normalization};
+    xcorrArgs = {'binMs', opt.binMs, 'maxLagMs', opt.maxLagMs, ...
+                 'normalization', opt.normalization};
     bRes = connectivity_xcorr(bSpikes, 'durationSec', bMeta.durationSec, xcorrArgs{:});
     tRes = connectivity_xcorr(tSpikes, 'durationSec', tMeta.durationSec, xcorrArgs{:});
-
     delta = tRes.adjacency - bRes.adjacency;
 
-    % --- Per-channel spike rates aligned to opt.channels ----------------
-    bRates = align_metric(bCache.spikeRates, bCache.channelsUsed, opt.channels);
-    tRates = align_metric(tCache.spikeRates, tCache.channelsUsed, opt.channels);
+    bRates     = align_metric(bCache.spikeRates, bCache.channelsUsed, opt.channels);
+    tRates     = align_metric(tCache.spikeRates, tCache.channelsUsed, opt.channels);
+    deltaRates = tRates - bRates;
 
-    % --- Figure layout --------------------------------------------------
+    % --- Output subdirectories --------------------------------------------
+    % Correlograms go to SI (supplementary) — they are quality-control
+    % panels, not a main-figure result (Cutts & Eglen 2014 §1.6).
+    siDir   = output_path(cfg, '', 'si', '');
+    corrDir = fullfile(siDir, 'correlogram');
+    heatDir = fullfile(opt.outDir, 'heatmap');
+    netDir  = fullfile(opt.outDir, 'network');
+    for d = {corrDir, heatDir, netDir, opt.statsDir}
+        if ~exist(d{1}, 'dir'); mkdir(d{1}); end
+    end
+
     colors = paired_plot_colors(study);
-    fig = create_panel_figure(18.0, 12.0);
+    layout = mea60_layout();
 
-    tl = tiledlayout(fig, 3, 3, 'Padding', 'compact', 'TileSpacing', 'compact');
-
-    % ===== Panel A — two exemplar cross-correlograms ===================
-    % Pick two pairs: (1) strongest baseline edge, (2) largest positive delta.
+    % --- Exemplar edges ---------------------------------------------------
     [iTop, jTop]   = top_edge(bRes.adjacency);
     [iGain, jGain] = top_edge(delta);
 
-    axA1 = nexttile(tl, 1);
-    plot_crosscorrelogram_pair(axA1, bSpikes, tSpikes, ...
-        iTop, jTop, bMeta.durationSec, tMeta.durationSec, ...
-        opt, colors, labels, 'A1');
-    title(axA1, sprintf('Strongest baseline edge  (ch %d \\leftrightarrow ch %d)', iTop, jTop));
+    % === Correlograms (export CSV + JSON for Python plotting) =============
+    export_correlogram(bSpikes, tSpikes, iTop, jTop, bMeta, tMeta, opt, ...
+        labels, colors, layout, ...
+        sprintf('Strongest baseline edge (el. %d - %d)', ...
+            layout.mcsLabels(iTop), layout.mcsLabels(jTop)), ...
+        fullfile(corrDir, [prefix '_correlogram_top_baseline']));
 
-    axA2 = nexttile(tl, 2);
-    plot_crosscorrelogram_pair(axA2, bSpikes, tSpikes, ...
-        iGain, jGain, bMeta.durationSec, tMeta.durationSec, ...
-        opt, colors, labels, 'A2');
-    title(axA2, sprintf('Largest \\Delta edge  (ch %d \\leftrightarrow ch %d)', iGain, jGain));
+    export_correlogram(bSpikes, tSpikes, iGain, jGain, bMeta, tMeta, opt, ...
+        labels, colors, layout, ...
+        sprintf('Largest delta edge (el. %d - %d)', ...
+            layout.mcsLabels(iGain), layout.mcsLabels(jGain)), ...
+        fullfile(corrDir, [prefix '_correlogram_top_delta']));
 
-    axLegend = nexttile(tl, 3);
-    axis(axLegend, 'off');
+    % === Adjacency heatmaps (spatially ordered by MCS label) ==============
+    % Compute dead-channel mask once from baseline, apply to all three.
+    refIdx   = cfg.channels.reference;   % PZ5 ch 15 = internal reference
+    deadMask = detect_dead_channels(bRes.adjacency, layout, refIdx);
 
-    % ===== Panel B — adjacency heatmaps =================================
-    axB1 = nexttile(tl, 4);
-    plot_adjacency_heatmap(axB1, bRes.adjacency, 'Baseline', false);
+    save_adj_heatmap(bRes.adjacency, labels.baseline, false, layout, deadMask, ...
+        fullfile(heatDir, [prefix '_adj_baseline']));
 
-    axB2 = nexttile(tl, 5);
-    plot_adjacency_heatmap(axB2, tRes.adjacency, labels.treatment, false);
+    save_adj_heatmap(tRes.adjacency, labels.treatment, false, layout, deadMask, ...
+        fullfile(heatDir, [prefix '_adj_treatment']));
 
-    axB3 = nexttile(tl, 6);
-    plot_adjacency_heatmap(axB3, delta, '\Delta (treatment - baseline)', true);
+    save_adj_heatmap(delta, '\Delta (treatment - baseline)', true, layout, deadMask, ...
+        fullfile(heatDir, [prefix '_adj_delta']));
 
-    % ===== Panel C — network on MEA geometry ============================
-    axC1 = nexttile(tl, 7);
-    plot_network_on_mea(bRes.adjacency, ...
-        'parent',           axC1, ...
-        'nodeMetric',       bRates, ...
-        'edgeMode',         'weight', ...
-        'edgeThresholdPct', opt.edgeThresholdPct, ...
-        'title',            sprintf('%s network (nodes = spikes min^{-1})', labels.baseline));
+    % === Network graphs (clean + labeled versions) ========================
+    for mode = {'clean', 'labeled'}
+        showLbl = strcmp(mode{1}, 'labeled');
+        if showLbl; suffix = '_labeled'; else; suffix = ''; end
 
-    axC2 = nexttile(tl, 8);
-    plot_network_on_mea(tRes.adjacency, ...
-        'parent',           axC2, ...
-        'nodeMetric',       tRates, ...
-        'edgeMode',         'weight', ...
-        'edgeThresholdPct', opt.edgeThresholdPct, ...
-        'title',            sprintf('%s network (nodes = spikes min^{-1})', labels.treatment));
+        save_network_panel(bRes.adjacency, bRates, opt, ...
+            sprintf('%s network', labels.baseline), 'weight', 'parula', showLbl, ...
+            fullfile(netDir, [prefix '_network_baseline' suffix]));
 
-    axC3 = nexttile(tl, 9);
-    deltaRates = tRates - bRates;
-    plot_network_on_mea(delta, ...
-        'parent',           axC3, ...
-        'nodeMetric',       deltaRates, ...
-        'edgeMode',         'delta', ...
-        'edgeThresholdPct', opt.edgeThresholdPct, ...
-        'nodeCmap',         'turbo', ...
-        'title',            '\Delta network (red = gained, blue = lost)');
+        save_network_panel(tRes.adjacency, tRates, opt, ...
+            sprintf('%s network', labels.treatment), 'weight', 'parula', showLbl, ...
+            fullfile(netDir, [prefix '_network_treatment' suffix]));
 
-    % --- Nature/NPP styling -----------------------------------------------
-    apply_nature_style(fig);
-
-    % --- Save (standard, unlabeled) --------------------------------------
-    if ~exist(opt.outDir, 'dir')
-        mkdir(opt.outDir);
+        save_network_panel(delta, deltaRates, opt, ...
+            '\Delta network (red = gained, blue = lost)', 'delta', 'turbo', showLbl, ...
+            fullfile(netDir, [prefix '_network_delta' suffix]));
     end
-    if isempty(opt.outName)
-        outBase = sprintf('%s_connectivity_exemplar', study);
-    else
-        outBase = opt.outName;
-    end
-    outFile = fullfile(opt.outDir, [outBase '.png']);
-    save_figure(fig, outFile);
-    fprintf('fig_connectivity_exemplar(%s): saved %s\n', study, outFile);
 
-    % --- Save annotated version (MCS electrode labels on network) ---------
-    layout = mea60_layout();
-    for axH = [axC1, axC2, axC3]
-        hold(axH, 'on');
-        for ch = 1:layout.nCh
-            text(axH, layout.xCoord(ch), layout.yCoord(ch) - 0.35, ...
-                sprintf('%d', layout.mcsLabels(ch)), ...
-                'HorizontalAlignment', 'center', 'VerticalAlignment', 'top', ...
-                'FontSize', 5, 'FontName', 'Arial', 'Color', [0.15 0.15 0.15]);
-        end
-        hold(axH, 'off');
-    end
-    annotFile = fullfile(opt.outDir, [outBase '_annotated.png']);
-    save_figure(fig, annotFile);
-    fprintf('fig_connectivity_exemplar(%s): saved %s\n', study, annotFile);
-
-    % --- Numeric sidecar ------------------------------------------------
-    stats = struct( ...
+    % --- Numeric sidecar --------------------------------------------------
+    sidecar = struct( ...
         'study',                      study, ...
         'pair_index',                 pairIdx, ...
         'pair_count',                 numel(pairs), ...
         'baseline_dataset',           pair.baseline, ...
         'treatment_dataset',          pair.treatment, ...
-        'strongest_baseline_edge_i',  iTop, ...
-        'strongest_baseline_edge_j',  jTop, ...
+        'strongest_baseline_edge_i',  layout.mcsLabels(iTop), ...
+        'strongest_baseline_edge_j',  layout.mcsLabels(jTop), ...
         'strongest_baseline_weight',  bRes.adjacency(iTop, jTop), ...
-        'largest_delta_edge_i',       iGain, ...
-        'largest_delta_edge_j',       jGain, ...
+        'largest_delta_edge_i',       layout.mcsLabels(iGain), ...
+        'largest_delta_edge_j',       layout.mcsLabels(jGain), ...
         'largest_delta_value',        delta(iGain, jGain), ...
         'mean_baseline_weight',       mean(bRes.adjacency(triu(true(size(bRes.adjacency)),1)), 'omitnan'), ...
         'mean_treatment_weight',      mean(tRes.adjacency(triu(true(size(tRes.adjacency)),1)), 'omitnan'), ...
@@ -193,26 +153,27 @@ function fig_connectivity_exemplar(study, varargin)
         'bin_ms',                     opt.binMs, ...
         'max_lag_ms',                 opt.maxLagMs, ...
         'normalization',              opt.normalization, ...
-        'edge_threshold_pct',         opt.edgeThresholdPct, ...
-        'figure_file',                outFile);
-    if ~exist(opt.statsDir, 'dir'); mkdir(opt.statsDir); end
-    export_figure_stats(stats, fullfile(opt.statsDir, [outBase '_stats']));
+        'edge_threshold_pct',         opt.edgeThresholdPct);
+    export_figure_stats(sidecar, ...
+        fullfile(opt.statsDir, [prefix '_connectivity_exemplar_stats']));
+
+    fprintf('  -> heatmap+network saved to %s/\n', opt.outDir);
+    fprintf('  -> correlograms  saved to %s/\n', corrDir);
 end
 
+
 % =========================================================================
+%                        HELPER FUNCTIONS
+% =========================================================================
+
 function v = align_metric(vec, chUsed, channels)
-% Return per-channel values aligned to `channels`; NaN for missing.
     v = nan(numel(channels), 1);
     [~, idx] = ismember(channels, chUsed(:)');
     ok = idx > 0;
     v(ok) = vec(idx(ok));
 end
 
-% =========================================================================
 function [i, j] = top_edge(A)
-% Return the indices of the single off-diagonal upper-triangular entry
-% with the largest (signed) value. For 'delta' input use the largest
-% positive entry; for baseline weights use the largest absolute peak.
     n = size(A, 1);
     mask = triu(true(n), 1);
     vals = A;
@@ -222,86 +183,131 @@ function [i, j] = top_edge(A)
     [i, j] = ind2sub([n n], idx);
 end
 
-% =========================================================================
-function plot_crosscorrelogram_pair(ax, bSpikes, tSpikes, ci, cj, bDur, tDur, opt, colors, labels, ~)
-    binSec  = opt.binMs / 1000;
+% -------------------------------------------------------------------------
+function export_correlogram(bSpikes, tSpikes, ci, cj, bMeta, tMeta, ...
+                            opt, labels, colors, layout, ttl, outBase)
+%EXPORT_CORRELOGRAM Write correlogram data as CSV + JSON for Python.
+    binSec = opt.binMs / 1000;
+    [cB, lagsB] = pair_xcorr(bSpikes{ci}, bSpikes{cj}, binSec, ...
+                             bMeta.durationSec, opt.maxLagMs);
+    [cT, lagsT] = pair_xcorr(tSpikes{ci}, tSpikes{cj}, binSec, ...
+                             tMeta.durationSec, opt.maxLagMs);
 
-    [cB, lagsB] = pair_xcorr(bSpikes{ci}, bSpikes{cj}, binSec, bDur, opt.maxLagMs);
-    [cT, lagsT] = pair_xcorr(tSpikes{ci}, tSpikes{cj}, binSec, tDur, opt.maxLagMs);
+    % CSV: lag_ms, baseline, treatment
+    T = table(lagsB(:), cB(:), cT(:), ...
+        'VariableNames', {'lag_ms', 'baseline', 'treatment'});
+    writetable(T, [outBase '_data.csv']);
 
-    hold(ax, 'on');
-    plot(ax, lagsB, cB, 'Color', colors.baseline,  'LineWidth', 1.5);
-    plot(ax, lagsT, cT, 'Color', colors.treatment, 'LineWidth', 1.5);
-    xline(ax, 0, ':', 'Color', [0.6 0.6 0.6]);
-    xlabel(ax, 'Lag (ms)');
-    ylabel(ax, 'Correlation (z)');
-    xlim(ax, [-opt.maxLagMs opt.maxLagMs]);
-    legend(ax, {labels.baseline, labels.treatment}, 'Location', 'best', 'Box', 'off');
-    box(ax, 'on');
-    hold(ax, 'off');
+    % JSON metadata
+    meta = struct( ...
+        'title',           ttl, ...
+        'baseline_label',  labels.baseline, ...
+        'treatment_label', labels.treatment, ...
+        'baseline_color',  colors.baseline, ...
+        'treatment_color', colors.treatment, ...
+        'channel_i_mcs',   layout.mcsLabels(ci), ...
+        'channel_j_mcs',   layout.mcsLabels(cj), ...
+        'max_lag_ms',      opt.maxLagMs);
+    fid = fopen([outBase '_meta.json'], 'w');
+    fwrite(fid, jsonencode(meta, 'PrettyPrint', true));
+    fclose(fid);
 end
 
-% =========================================================================
 function [c, lags] = pair_xcorr(tsI, tsJ, binSec, durationSec, maxLagMs)
-% Binned, z-scored cross-correlation for a single channel pair.
     nBins = max(1, floor(durationSec / binSec));
     edges = (0:nBins) * binSec;
-    if isempty(tsI); xi = zeros(1, nBins); else, xi = histcounts(tsI, edges); end
-    if isempty(tsJ); xj = zeros(1, nBins); else, xj = histcounts(tsJ, edges); end
+    if isempty(tsI); xi = zeros(1, nBins); else; xi = histcounts(tsI, edges); end
+    if isempty(tsJ); xj = zeros(1, nBins); else; xj = histcounts(tsJ, edges); end
     muI = mean(xi); sdI = std(xi); if sdI == 0; sdI = 1; end
     muJ = mean(xj); sdJ = std(xj); if sdJ == 0; sdJ = 1; end
     xi = (xi - muI) / sdI;
     xj = (xj - muJ) / sdJ;
     maxLagBins = round(maxLagMs / (binSec * 1000));
     [c, lagBins] = xcorr(xi, xj, maxLagBins, 'unbiased');
-    % Note: xcorr 'unbiased' already normalizes; no extra 1/nBins needed.
-    % c = c / nBins;  % REMOVED: was a double-normalization bug
     lags = lagBins * binSec * 1000;
 end
 
-% =========================================================================
-function plot_adjacency_heatmap(ax, A, ttl, symmetric)
-% Square heatmap of the adjacency matrix. The colormap and colour limits
-% are applied BEFORE the colorbar is created; the colorbar label is set
-% via direct property assignment (cb.Label.String) to avoid the
-% ylabel(cb,...) listener-callback bug that throws "Attempt to modify
-% the tree during an update traversal" on some R2023b graphics trees.
-    imagesc(ax, A);
-    axis(ax, 'image');
-    set(ax, 'YDir', 'reverse');
-    title(ax, ttl, 'FontWeight', 'bold');
-    xlabel(ax, 'Channel index');
-    ylabel(ax, 'Channel index');
+% -------------------------------------------------------------------------
+function deadMask = detect_dead_channels(A, layout, refIdx)
+%DETECT_DEAD_CHANNELS  Identify reference + dead amplifier channels.
+%   Returns a logical mask (1 = exclude) over the UNSORTED channel indices.
+%   Dead channels are those whose mean cross-correlation is more than 3 SD
+%   below the channel mean — an extreme threshold that catches only truly
+%   non-contributing hardware faults.
+    nCh = size(A, 1);
+    deadMask = false(1, nCh);
+    deadMask(refIdx) = true;
 
-    if symmetric
-        finiteA = A(~isnan(A));
-        absMax = max(abs(finiteA), [], 'all');
-        if isempty(absMax) || absMax == 0; absMax = 1; end
-        colormap(ax, diverging_cmap_local(256));
-        clim(ax, [-absMax, absMax]);
-    else
-        finiteA = A(~isnan(A) & ~isinf(A));
-        if isempty(finiteA)
-            loHi = [0 1];
-        else
-            loHi = [min(finiteA), max(finiteA)];
-            if diff(loHi) == 0; loHi = loHi + [-1 1]; end
-        end
-        colormap(ax, parula(256));
-        clim(ax, loHi);
+    chMean = nan(1, nCh);
+    for c = 1:nCh
+        row = A(c, [1:c-1, c+1:nCh]);
+        chMean(c) = mean(row, 'omitnan');
     end
+    % Channels with mean xcorr below 1/10th of the median are dead
+    % hardware (amplifier faults, broken connector pins). This is an
+    % extreme threshold: only catches channels ~10x weaker than typical.
+    med = median(chMean, 'omitnan');
+    deadMask(chMean < med / 10) = true;
 
-    drawnow limitrate nocallbacks;
-    cb = colorbar(ax);
-    cb.Label.String     = 'Peak cross-correlation (z)';
-    cb.Label.FontWeight = 'bold';
+    excluded = layout.mcsLabels(deadMask);
+    if any(deadMask)
+        fprintf('    heatmap: excluding %d ch (MCS %s)\n', ...
+            sum(deadMask), mat2str(excluded));
+    end
 end
 
-% =========================================================================
-function cmap = diverging_cmap_local(n)
-    half = floor(n / 2);
-    top  = n - half;
-    blue = [linspace(0.11,1,half).', linspace(0.30,1,half).', linspace(0.60,1,half).'];
-    red  = [linspace(1,0.75,top).',  linspace(1,0.10,top).',  linspace(1,0.15,top).'];
-    cmap = [blue; red];
+% -------------------------------------------------------------------------
+function save_adj_heatmap(A, ttl, ~, layout, deadMask, outBase)
+%SAVE_ADJ_HEATMAP Export adjacency CSV + JSON for Python heatmap plotting.
+%   Excludes channels flagged in deadMask (reference + dead amplifier).
+%   Produces Inkscape-ready PDFs via scripts/plot_heatmaps.py.
+
+    [sortedLabels, sortOrder] = sort(layout.mcsLabels);
+
+    % Map deadMask (unsorted) to sorted order
+    keepSorted = ~deadMask(sortOrder);
+    sortedLabels = sortedLabels(keepSorted);
+    sortOrder    = sortOrder(keepSorted);
+    A_sorted     = A(sortOrder, sortOrder);
+    nCh          = numel(sortedLabels);
+
+    % CSV: adjacency matrix with dead channels removed
+    writematrix(A_sorted, [outBase '_data.csv']);
+
+    % Tick labels: every electrode
+    allLabels = arrayfun(@num2str, sortedLabels, 'UniformOutput', false);
+
+    % JSON metadata
+    symmetric = contains(ttl, '\Delta') || contains(ttl, 'Delta');
+    meta = struct( ...
+        'title',        ttl, ...
+        'symmetric',    symmetric, ...
+        'tick_pos',     1:nCh, ...
+        'tick_labels',  {allLabels}, ...
+        'n_channels',   nCh);
+    fid = fopen([outBase '_meta.json'], 'w');
+    fwrite(fid, jsonencode(meta, 'PrettyPrint', true));
+    fclose(fid);
 end
+
+% -------------------------------------------------------------------------
+function save_network_panel(adjacency, nodeMetric, opt, ttl, edgeMode, ...
+                            nodeCmap, showLabels, outBase)
+    fig = create_panel_figure(6.0, 6.0);
+    ax  = axes(fig);
+
+    plot_network_on_mea(adjacency, ...
+        'parent',           ax, ...
+        'nodeMetric',       nodeMetric, ...
+        'edgeMode',         edgeMode, ...
+        'edgeThresholdPct', opt.edgeThresholdPct, ...
+        'nodeCmap',         nodeCmap, ...
+        'title',            ttl, ...
+        'showLabels',       showLabels, ...
+        'labelFontSize',    5);
+
+    apply_nature_style(fig);
+    save_figure(fig, outBase);
+    close(fig);
+end
+

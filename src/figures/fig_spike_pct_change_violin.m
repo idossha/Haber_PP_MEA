@@ -72,7 +72,7 @@ function fig_spike_pct_change_violin(study, varargin)
         error('fig_spike_pct_change_violin:NoData', 'No observations remain after filters.');
     end
 
-    panelDir = output_path(cfg, study, 'rates', 'panels');
+    panelDir = output_path(cfg, study, 'rates', '');
     statsDir = output_path(cfg, study, 'rates', 'stats');
     if ~exist(panelDir, 'dir'); mkdir(panelDir); end
     if ~exist(statsDir, 'dir'); mkdir(statsDir); end

@@ -11,13 +11,13 @@ function dir = output_path(cfg, study, category, subdir)
 %       → fullfile(cfg.paths.output, 'SI')
 %
 %   dir = OUTPUT_PATH(cfg, '', 'shared', '')
-%       → fullfile(cfg.paths.output, 'shared')
+%       → fullfile(cfg.paths.output, 'SI')
 %
 % INPUTS:
 %   cfg      - project_config() struct (needs cfg.paths.output)
 %   study    - 'doi' or 'ket' (ignored for 'si' and 'shared')
 %   category - 'rates', 'connectivity', 'si', or 'shared'
-%   subdir   - 'panels', 'stats', 'exemplars', 'composite', or ''
+%   subdir   - 'panels', 'stats', or ''
 %
 % OUTPUT:
 %   dir - absolute path to the resolved directory
@@ -32,7 +32,7 @@ function dir = output_path(cfg, study, category, subdir)
         case 'si'
             dir = fullfile(cfg.paths.output, 'SI');
         case 'shared'
-            dir = fullfile(cfg.paths.output, 'shared');
+            dir = fullfile(cfg.paths.output, 'SI');
         otherwise
             key = sprintf('%s_%s', lower(study), lower(category));
             if ~isfield(figMap, key)

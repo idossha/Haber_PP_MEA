@@ -131,7 +131,7 @@ function fig_rate_change_bar(metric, study, varargin)
         error('fig_rate_change_bar:NoData', 'No recordings with non-empty denominator.');
     end
 
-    panelDir = output_path(cfg, study, 'rates', 'panels');
+    panelDir = output_path(cfg, study, 'rates', '');
     statsDir = output_path(cfg, study, 'rates', 'stats');
     if ~exist(panelDir, 'dir'); mkdir(panelDir); end
     if ~exist(statsDir, 'dir'); mkdir(statsDir); end
